@@ -1,0 +1,44 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+bin/
+
+# Language server & Compilation Database
+.cache/
+compile_commands.json
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled Object files & Static/Dynamic Libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# Debug symbols & Core dumps
+*.dSYM/
+core
+*.core
+
+# In-source CMake artifacts
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+Testing/

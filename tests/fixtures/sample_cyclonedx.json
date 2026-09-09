@@ -1,0 +1,128 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "serialNumber": "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "bom-ref": "pkg:npm/my-web-app@2.1.0",
+      "type": "application",
+      "name": "my-web-app",
+      "version": "2.1.0",
+      "description": "Primary Web Application"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:npm/express@4.17.1",
+      "type": "library",
+      "name": "express",
+      "version": "4.17.1",
+      "purl": "pkg:npm/express@4.17.1",
+      "description": "Fast, unopinionated, minimalist web framework"
+    },
+    {
+      "bom-ref": "pkg:npm/body-parser@1.19.0",
+      "type": "library",
+      "name": "body-parser",
+      "version": "1.19.0",
+      "purl": "pkg:npm/body-parser@1.19.0",
+      "description": "Node.js body parsing middleware"
+    },
+    {
+      "bom-ref": "pkg:npm/qs@6.7.0",
+      "type": "library",
+      "name": "qs",
+      "version": "6.7.0",
+      "purl": "pkg:npm/qs@6.7.0",
+      "description": "A querystring parser"
+    },
+    {
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1",
+      "type": "library",
+      "name": "log4j-core",
+      "version": "2.14.1",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1",
+      "description": "Apache Log4j Core"
+    },
+    {
+      "bom-ref": "pkg:npm/lodash@4.17.21",
+      "type": "library",
+      "name": "lodash",
+      "version": "4.17.21",
+      "purl": "pkg:npm/lodash@4.17.21",
+      "description": "Lodash modular utilities"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:npm/my-web-app@2.1.0",
+      "dependsOn": [
+        "pkg:npm/express@4.17.1",
+        "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+      ]
+    },
+    {
+      "ref": "pkg:npm/express@4.17.1",
+      "dependsOn": [
+        "pkg:npm/body-parser@1.19.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/body-parser@1.19.0",
+      "dependsOn": [
+        "pkg:npm/qs@6.7.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/qs@6.7.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/lodash@4.17.21",
+      "dependsOn": []
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "CVE-2021-44228",
+      "description": "Apache Log4j2 JNDI features do not protect against attacker controlled LDAP",
+      "ratings": [
+        {
+          "source": { "name": "NVD" },
+          "score": 10.0,
+          "severity": "critical",
+          "method": "CVSSv31"
+        }
+      ],
+      "cwes": [502],
+      "affects": [
+        {
+          "ref": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-29244",
+      "description": "Prototype Pollution in qs before 6.7.3",
+      "ratings": [
+        {
+          "source": { "name": "NVD" },
+          "score": 7.5,
+          "severity": "high",
+          "method": "CVSSv31"
+        }
+      ],
+      "cwes": [1321],
+      "affects": [
+        {
+          "ref": "pkg:npm/qs@6.7.0"
+        }
+      ]
+    }
+  ]
+}
