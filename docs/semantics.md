@@ -94,3 +94,19 @@ The DSL implements a static yet flexible type system to validate expressions and
 - **CVSS Score Bounds**: If specified as a numeric threshold, the CVSS score must be non-negative ($\ge 0.0$).
 - **WHERE Clause**: Must strictly evaluate to a `Boolean` expression.
 
+### 4.5 Aggregations and `GROUP BY` Constraints
+- **SQL Projection Rule with GROUP BY**: When a `GROUP BY` clause is specified, any projected column that is not enclosed within an aggregate function (`COUNT(...)`) **must** appear in the `GROUP BY` clause:
+  ```
+  error: Column '<field>' must appear in the GROUP BY clause or be used in an aggregate function
+  ```
+- **Projections without GROUP BY**: When an aggregate function is used without `GROUP BY` (scalar aggregation), ordinary non-aggregate columns cannot be selected.
+- **Wildcard `*` Restrictions**: `SELECT *` is strictly forbidden in combination with `GROUP BY` or aggregate functions:
+  ```
+  error: Wildcard '*' cannot be used with GROUP BY clause
+  error: Wildcard '*' cannot be combined with aggregate functions
+  ```
+- **Aggregate Counting Semantics**:
+  - `COUNT(*)` counts all records in the partition or collection.
+  - `COUNT(<column>)` counts only rows where `<column>` is defined and non-null.
+  - Scalar aggregation on an empty set yields a single row containing `0`. Grouped aggregation on an empty set yields 0 rows.
+

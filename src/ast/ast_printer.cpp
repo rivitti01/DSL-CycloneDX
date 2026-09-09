@@ -64,6 +64,37 @@ std::string_view assert_target_to_string(AssertTarget target) {
     return "UNKNOWN_TARGET";
 }
 
+bool is_aggregate_expression(std::string_view expr, std::string* func_name, std::string* arg) {
+    if (expr.size() < 7) return false;
+    std::string upper;
+    upper.reserve(expr.size());
+    for (char c : expr) {
+        upper.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+    }
+
+    if (upper.rfind("COUNT(", 0) == 0 && upper.back() == ')') {
+        if (func_name) *func_name = "COUNT";
+        std::string inner = std::string(expr.substr(6, expr.size() - 7));
+        size_t s = inner.find_first_not_of(" \t\r\n");
+        size_t e = inner.find_last_not_of(" \t\r\n");
+        if (s != std::string::npos && e != std::string::npos) {
+            inner = inner.substr(s, e - s + 1);
+        } else {
+            inner.clear();
+        }
+        if (arg) *arg = inner;
+        return true;
+    }
+    return false;
+}
+
+bool SelectStatement::has_aggregates() const {
+    for (const auto& p : projections) {
+        if (is_aggregate_expression(p)) return true;
+    }
+    return false;
+}
+
 std::string ColumnRefExpr::full_path() const {
     std::string res;
     for (size_t i = 0; i < path.size(); ++i) {
@@ -159,6 +190,15 @@ void ASTPrinter::visit(SelectStatement& node) {
         indent();
         node.where_clause->accept(*this);
         dedent();
+    }
+    if (!node.group_by.empty()) {
+        write_indent();
+        oss_ << "GroupBy: ";
+        for (size_t i = 0; i < node.group_by.size(); ++i) {
+            if (i > 0) oss_ << ", ";
+            oss_ << node.group_by[i];
+        }
+        oss_ << "\n";
     }
     if (node.order_by) {
         write_indent();

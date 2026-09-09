@@ -14,6 +14,7 @@ std::string_view ir_node_type_name(IRNodeType type) {
         case IRNodeType::HashJoin: return "IRHashJoin";
         case IRNodeType::GraphTraverse: return "IRGraphTraverse";
         case IRNodeType::BlastRadius: return "IRBlastRadius";
+        case IRNodeType::Aggregate: return "IRAggregate";
     }
     return "UnknownIR";
 }
@@ -79,6 +80,21 @@ std::string IRBlastRadius::description() const {
     return "BlastRadius(vulnerability_id=\"" + vulnerability_id + "\")";
 }
 
+std::string IRAggregate::description() const {
+    std::string s = "Aggregate(group_by=[";
+    for (size_t i = 0; i < group_by_columns.size(); ++i) {
+        if (i > 0) s += ", ";
+        s += group_by_columns[i];
+    }
+    s += "], funcs=[";
+    for (size_t i = 0; i < aggregates.size(); ++i) {
+        if (i > 0) s += ", ";
+        s += aggregates[i].result_column;
+    }
+    s += "])";
+    return s;
+}
+
 void IRPrinter::print_node(const IRNode& node, std::ostringstream& oss, int indent) {
     for (int i = 0; i < indent; ++i) {
         oss << "  ";
@@ -125,6 +141,11 @@ void IRPrinter::print_node(const IRNode& node, std::ostringstream& oss, int inde
         }
         case IRNodeType::BlastRadius: {
             const auto& n = static_cast<const IRBlastRadius&>(node);
+            if (n.child) print_node(*n.child, oss, indent + 1);
+            break;
+        }
+        case IRNodeType::Aggregate: {
+            const auto& n = static_cast<const IRAggregate&>(node);
             if (n.child) print_node(*n.child, oss, indent + 1);
             break;
         }

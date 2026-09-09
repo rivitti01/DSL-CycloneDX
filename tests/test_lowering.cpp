@@ -387,3 +387,94 @@ TEST_CASE("IROptimizer: Predicate Pushdown") {
     }
 }
 
+TEST_CASE("Lowering: Aggregations and GROUP BY") {
+    SUBCASE("Scalar aggregate: SELECT COUNT(*) FROM components WHERE type = 'library'") {
+        std::string q = "SELECT COUNT(*) FROM components WHERE type = 'library';";
+        auto plan = parse_and_lower(q);
+        REQUIRE(plan.root != nullptr);
+        CHECK(plan.root->type() == IRNodeType::Project);
+
+        auto* proj = dynamic_cast<IRProject*>(plan.root.get());
+        REQUIRE(proj != nullptr);
+        REQUIRE(proj->child != nullptr);
+        CHECK(proj->child->type() == IRNodeType::Aggregate);
+
+        auto* agg = dynamic_cast<IRAggregate*>(proj->child.get());
+        REQUIRE(agg != nullptr);
+        CHECK(agg->group_by_columns.empty());
+        REQUIRE(agg->aggregates.size() == 1);
+        CHECK(agg->aggregates[0].kind == AggregateFunction::Kind::Count);
+        CHECK(agg->aggregates[0].argument == "*");
+        CHECK(agg->aggregates[0].result_column == "COUNT(*)");
+
+        REQUIRE(agg->child != nullptr);
+        CHECK(agg->child->type() == IRNodeType::Filter);
+
+        auto* filter = dynamic_cast<IRFilter*>(agg->child.get());
+        REQUIRE(filter != nullptr);
+        REQUIRE(filter->child != nullptr);
+        CHECK(filter->child->type() == IRNodeType::Scan);
+    }
+
+    SUBCASE("Grouped aggregate: SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity ORDER BY severity ASC LIMIT 5") {
+        std::string q = "SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity ORDER BY severity ASC LIMIT 5;";
+        auto plan = parse_and_lower(q);
+        REQUIRE(plan.root != nullptr);
+        CHECK(plan.root->type() == IRNodeType::Project);
+
+        auto* proj = dynamic_cast<IRProject*>(plan.root.get());
+        REQUIRE(proj != nullptr);
+        REQUIRE(proj->child != nullptr);
+        CHECK(proj->child->type() == IRNodeType::Limit);
+
+        auto* limit = dynamic_cast<IRLimit*>(proj->child.get());
+        REQUIRE(limit != nullptr);
+        CHECK(limit->limit == 5);
+        REQUIRE(limit->child != nullptr);
+        CHECK(limit->child->type() == IRNodeType::Sort);
+
+        auto* sort = dynamic_cast<IRSort*>(limit->child.get());
+        REQUIRE(sort != nullptr);
+        CHECK(sort->column == "severity");
+        CHECK(sort->ascending);
+        REQUIRE(sort->child != nullptr);
+        CHECK(sort->child->type() == IRNodeType::Aggregate);
+
+        auto* agg = dynamic_cast<IRAggregate*>(sort->child.get());
+        REQUIRE(agg != nullptr);
+        REQUIRE(agg->group_by_columns.size() == 1);
+        CHECK(agg->group_by_columns[0] == "severity");
+        REQUIRE(agg->aggregates.size() == 1);
+        CHECK(agg->aggregates[0].result_column == "COUNT(*)");
+
+        REQUIRE(agg->child != nullptr);
+        CHECK(agg->child->type() == IRNodeType::Scan);
+    }
+
+    SUBCASE("IRPrinter and IROptimizer on IRAggregate plan") {
+        std::string q = "SELECT type, COUNT(*) FROM components WHERE 1 = 1 AND type = 'library' GROUP BY type;";
+        auto plan = parse_and_lower(q);
+
+        // Verify IRPrinter
+        std::string printed = IRPrinter::print(plan);
+        CHECK(printed.find("Aggregate(group_by=[type], funcs=[COUNT(*)])") != std::string::npos);
+
+        // Verify IROptimizer constant folding on child of aggregate
+        IROptimizer opt;
+        auto opt_plan = opt.optimize(plan);
+        REQUIRE(opt_plan.root != nullptr);
+
+        auto* proj = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj != nullptr);
+        auto* agg = dynamic_cast<IRAggregate*>(proj->child.get());
+        REQUIRE(agg != nullptr);
+        auto* filter = dynamic_cast<IRFilter*>(agg->child.get());
+        REQUIRE(filter != nullptr);
+
+        // Predicate 1 = 1 was folded, leaving only type = 'library'
+        auto* eq = dynamic_cast<BinaryOpExpr*>(filter->predicate.get());
+        REQUIRE(eq != nullptr);
+        CHECK(eq->op == BinaryOperator::Equal);
+    }
+}
+

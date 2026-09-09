@@ -123,6 +123,8 @@ struct OrderByClause {
     bool ascending{true};
 };
 
+bool is_aggregate_expression(std::string_view expr, std::string* func_name = nullptr, std::string* arg = nullptr);
+
 class SelectStatement : public StatementNode {
 public:
     SelectStatement(SourceLocation loc) : StatementNode(std::move(loc)) {}
@@ -133,8 +135,12 @@ public:
     std::string collection;               // e.g. "components"
     std::optional<std::string> bom_path;
     std::unique_ptr<ExpressionNode> where_clause;
+    std::vector<std::string> group_by;
     std::optional<OrderByClause> order_by;
     std::optional<size_t> limit;
+
+    bool has_aggregates() const;
+    bool has_group_by() const { return !group_by.empty(); }
 };
 
 class WhoUsesStatement : public StatementNode {

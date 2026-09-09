@@ -128,4 +128,40 @@ TEST_CASE("Semantic Analysis: Semantic Errors") {
         CHECK_FALSE(ok);
         CHECK(diag.has_errors());
     }
+
+    SUBCASE("Aggregation & GROUP BY: Valid statements") {
+        DiagnosticEngine diag;
+        CHECK(check_semantic("SELECT COUNT(*) FROM components;", diag));
+        CHECK(check_semantic("SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity;", diag));
+        CHECK(check_semantic("SELECT type, COUNT(name) FROM components WHERE type = 'library' GROUP BY type;", diag));
+        CHECK_FALSE(diag.has_errors());
+    }
+
+    SUBCASE("Aggregation & GROUP BY: Column not in GROUP BY") {
+        DiagnosticEngine diag;
+        // 'id' is not in GROUP BY and not in an aggregate function
+        bool ok = check_semantic("SELECT severity, id, COUNT(*) FROM vulnerabilities GROUP BY severity;", diag);
+        CHECK_FALSE(ok);
+        CHECK(diag.has_errors());
+    }
+
+    SUBCASE("Aggregation & GROUP BY: Non-aggregate column with aggregate without GROUP BY") {
+        DiagnosticEngine diag;
+        // 'name' cannot be selected with COUNT(*) without GROUP BY name
+        bool ok = check_semantic("SELECT name, COUNT(*) FROM components;", diag);
+        CHECK_FALSE(ok);
+        CHECK(diag.has_errors());
+    }
+
+    SUBCASE("Aggregation & GROUP BY: Wildcard '*' cannot be combined with GROUP BY or COUNT") {
+        DiagnosticEngine diag1;
+        bool ok1 = check_semantic("SELECT * FROM components GROUP BY type;", diag1);
+        CHECK_FALSE(ok1);
+        CHECK(diag1.has_errors());
+
+        DiagnosticEngine diag2;
+        bool ok2 = check_semantic("SELECT *, COUNT(*) FROM components;", diag2);
+        CHECK_FALSE(ok2);
+        CHECK(diag2.has_errors());
+    }
 }

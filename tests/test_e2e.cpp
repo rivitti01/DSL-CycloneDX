@@ -195,5 +195,40 @@ TEST_CASE("End-to-End: Full Compiler Pipeline") {
         CHECK(out_mermaid.find("body_parser --> qs") != std::string::npos);
         CHECK(out_mermaid.find("style qs fill:#ff4d4d") != std::string::npos);
         CHECK(out_mermaid.find("style body_parser fill:#ffa500") != std::string::npos);
+
+        // Test CLI execution with COUNT(*) and GROUP BY
+        std::string cmd_count = exe + " -b \"" + FIXTURE + "\" -c \"SELECT COUNT(*) FROM components WHERE type = 'library';\"";
+        std::string out_count = run_cmd(cmd_count);
+        CHECK(out_count.find("COUNT(*)") != std::string::npos);
+        CHECK(out_count.find("5") != std::string::npos);
+
+        std::string cmd_groupby = exe + " -b \"" + FIXTURE + "\" -c \"SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity ORDER BY severity ASC;\"";
+        std::string out_groupby = run_cmd(cmd_groupby);
+        CHECK(out_groupby.find("severity") != std::string::npos);
+        CHECK(out_groupby.find("critical") != std::string::npos);
+        CHECK(out_groupby.find("high") != std::string::npos);
+    }
+
+    SUBCASE("Aggregation and GROUP BY compiler pipeline") {
+        auto res1 = run_e2e("SELECT COUNT(*) FROM components WHERE type = 'library';");
+        CHECK_FALSE(res1.is_empty());
+        REQUIRE(res1.rows.size() == 1);
+        CHECK(res1.rows[0][0] == "5");
+
+        auto res2 = run_e2e("SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity ORDER BY severity ASC;");
+        CHECK_FALSE(res2.is_empty());
+        REQUIRE(res2.rows.size() == 2);
+        CHECK(res2.rows[0][0] == "critical");
+        CHECK(res2.rows[0][1] == "1");
+        CHECK(res2.rows[1][0] == "high");
+        CHECK(res2.rows[1][1] == "1");
+
+        auto res3 = run_e2e("SELECT type, COUNT(*) FROM components GROUP BY type ORDER BY type ASC;");
+        CHECK_FALSE(res3.is_empty());
+        REQUIRE(res3.rows.size() == 2);
+        CHECK(res3.rows[0][0] == "application");
+        CHECK(res3.rows[0][1] == "1");
+        CHECK(res3.rows[1][0] == "library");
+        CHECK(res3.rows[1][1] == "5");
     }
 }

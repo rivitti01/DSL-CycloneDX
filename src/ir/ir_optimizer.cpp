@@ -150,6 +150,14 @@ std::unique_ptr<IRNode> clone_ir_node(const IRNode* node) {
                 b->vulnerability_id
             );
         }
+        case IRNodeType::Aggregate: {
+            const auto* a = static_cast<const IRAggregate*>(node);
+            return std::make_unique<IRAggregate>(
+                clone_ir_node(a->child.get()),
+                a->group_by_columns,
+                a->aggregates
+            );
+        }
     }
     return nullptr;
 }
@@ -279,6 +287,16 @@ std::unordered_set<std::string> get_produced_attributes(const IRNode& node) {
             attrs = {"vulnerability_id", "severity", "score", "total_components",
                      "directly_affected_components", "transitively_affected_components",
                      "impact_percentage", "root_application_affected"};
+            break;
+        }
+        case IRNodeType::Aggregate: {
+            const auto& a = static_cast<const IRAggregate&>(node);
+            for (const auto& col : a.group_by_columns) {
+                attrs.insert(col);
+            }
+            for (const auto& f : a.aggregates) {
+                attrs.insert(f.result_column);
+            }
             break;
         }
         case IRNodeType::Project: {
@@ -560,6 +578,12 @@ std::unique_ptr<IRNode> IROptimizer::fold_constants(std::unique_ptr<IRNode> node
             if (b->child) b->child = fold_constants(std::move(b->child));
             return node;
         }
+
+        case IRNodeType::Aggregate: {
+            auto* a = static_cast<IRAggregate*>(node.get());
+            if (a->child) a->child = fold_constants(std::move(a->child));
+            return node;
+        }
     }
 
     return node;
@@ -683,6 +707,12 @@ std::unique_ptr<IRNode> IROptimizer::pushdown_predicates(std::unique_ptr<IRNode>
         case IRNodeType::BlastRadius: {
             auto* b = static_cast<IRBlastRadius*>(node.get());
             if (b->child) b->child = pushdown_predicates(std::move(b->child));
+            return node;
+        }
+
+        case IRNodeType::Aggregate: {
+            auto* a = static_cast<IRAggregate*>(node.get());
+            if (a->child) a->child = pushdown_predicates(std::move(a->child));
             return node;
         }
     }

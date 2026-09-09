@@ -63,6 +63,12 @@ bool SbomUtilityCodeGen::can_offload(const IRPlan& plan, std::string* reason) {
         return false;
     }
 
+    // Aggregates (COUNT, GROUP BY) not supported in sbom-utility
+    if (curr->type() == IRNodeType::Aggregate) {
+        if (reason) *reason = "sbom-utility query command does not support aggregation functions (COUNT) or GROUP BY";
+        return false;
+    }
+
     // Optional Filter
     if (curr->type() == IRNodeType::Filter) {
         const auto* filter_node = static_cast<const IRFilter*>(curr);

@@ -41,6 +41,25 @@ IRPlan QueryLowerer::lower_select(SelectStatement& stmt) {
         root = std::make_unique<IRFilter>(std::move(root), clone_expression(stmt.where_clause.get()));
     }
 
+    if (stmt.has_aggregates() || stmt.has_group_by()) {
+        std::vector<AggregateFunction> agg_funcs;
+        for (const auto& proj : stmt.projections) {
+            std::string func_name, arg;
+            if (is_aggregate_expression(proj, &func_name, &arg)) {
+                agg_funcs.push_back(AggregateFunction{
+                    AggregateFunction::Kind::Count,
+                    arg,
+                    proj
+                });
+            }
+        }
+        root = std::make_unique<IRAggregate>(
+            std::move(root),
+            stmt.group_by,
+            std::move(agg_funcs)
+        );
+    }
+
     if (stmt.order_by) {
         root = std::make_unique<IRSort>(std::move(root), stmt.order_by->column, stmt.order_by->ascending);
     }

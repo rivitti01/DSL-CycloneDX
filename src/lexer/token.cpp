@@ -18,12 +18,14 @@ std::string_view token_type_name(TokenType type) {
         case TokenType::KwSelect: return "SELECT";
         case TokenType::KwFrom: return "FROM";
         case TokenType::KwWhere: return "WHERE";
-        case TokenType::KwOrder: return "ORDER";
+        case TokenType::KwGroup: return "GROUP";
         case TokenType::KwBy: return "BY";
+        case TokenType::KwOrder: return "ORDER";
         case TokenType::KwAsc: return "ASC";
         case TokenType::KwDesc: return "DESC";
         case TokenType::KwLimit: return "LIMIT";
         case TokenType::KwIn: return "IN";
+        case TokenType::KwCount: return "COUNT";
 
         case TokenType::KwWho: return "WHO";
         case TokenType::KwUses: return "USES";
@@ -88,12 +90,14 @@ std::optional<TokenType> lookup_keyword(std::string_view text) {
         {"SELECT", TokenType::KwSelect},
         {"FROM", TokenType::KwFrom},
         {"WHERE", TokenType::KwWhere},
-        {"ORDER", TokenType::KwOrder},
+        {"GROUP", TokenType::KwGroup},
         {"BY", TokenType::KwBy},
+        {"ORDER", TokenType::KwOrder},
         {"ASC", TokenType::KwAsc},
         {"DESC", TokenType::KwDesc},
         {"LIMIT", TokenType::KwLimit},
         {"IN", TokenType::KwIn},
+        {"COUNT", TokenType::KwCount},
 
         {"WHO", TokenType::KwWho},
         {"USES", TokenType::KwUses},

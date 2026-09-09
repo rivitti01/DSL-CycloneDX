@@ -293,3 +293,109 @@ TEST_CASE("Parser: Policy assertion statements (ASSERT NO ...)") {
         CHECK(diag.has_errors());
     }
 }
+
+TEST_CASE("Parser: Aggregations and GROUP BY") {
+    SUBCASE("SELECT COUNT(*) FROM components") {
+        DiagnosticEngine diag;
+        auto prog = parse("SELECT COUNT(*) FROM components;", diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+        REQUIRE(prog->statements.size() == 1);
+
+        auto* select = dynamic_cast<SelectStatement*>(prog->statements[0].get());
+        REQUIRE(select != nullptr);
+        CHECK(select->has_aggregates());
+        CHECK_FALSE(select->has_group_by());
+        REQUIRE(select->projections.size() == 1);
+        CHECK(select->projections[0] == "COUNT(*)");
+        CHECK(select->collection == "components");
+    }
+
+    SUBCASE("SELECT COUNT(name) FROM components") {
+        DiagnosticEngine diag;
+        auto prog = parse("SELECT count(name) FROM components IN 'bom.json';", diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+        REQUIRE(prog->statements.size() == 1);
+
+        auto* select = dynamic_cast<SelectStatement*>(prog->statements[0].get());
+        REQUIRE(select != nullptr);
+        CHECK(select->has_aggregates());
+        REQUIRE(select->projections.size() == 1);
+        CHECK(select->projections[0] == "COUNT(name)");
+        REQUIRE(select->bom_path.has_value());
+        CHECK(*select->bom_path == "bom.json");
+    }
+
+    SUBCASE("SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity") {
+        DiagnosticEngine diag;
+        auto prog = parse("SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity;", diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+        REQUIRE(prog->statements.size() == 1);
+
+        auto* select = dynamic_cast<SelectStatement*>(prog->statements[0].get());
+        REQUIRE(select != nullptr);
+        CHECK(select->has_aggregates());
+        CHECK(select->has_group_by());
+        REQUIRE(select->projections.size() == 2);
+        CHECK(select->projections[0] == "severity");
+        CHECK(select->projections[1] == "COUNT(*)");
+        REQUIRE(select->group_by.size() == 1);
+        CHECK(select->group_by[0] == "severity");
+    }
+
+    SUBCASE("SELECT with WHERE, GROUP BY, ORDER BY, and LIMIT") {
+        DiagnosticEngine diag;
+        std::string q = "SELECT type, COUNT(name) FROM components "
+                        "WHERE type = 'library' "
+                        "GROUP BY type "
+                        "ORDER BY COUNT(name) DESC "
+                        "LIMIT 10;";
+        auto prog = parse(q, diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+        REQUIRE(prog->statements.size() == 1);
+
+        auto* select = dynamic_cast<SelectStatement*>(prog->statements[0].get());
+        REQUIRE(select != nullptr);
+        CHECK(select->has_aggregates());
+        CHECK(select->has_group_by());
+        REQUIRE(select->projections.size() == 2);
+        CHECK(select->projections[0] == "type");
+        CHECK(select->projections[1] == "COUNT(name)");
+        REQUIRE(select->where_clause != nullptr);
+        REQUIRE(select->group_by.size() == 1);
+        CHECK(select->group_by[0] == "type");
+        REQUIRE(select->order_by.has_value());
+        CHECK(select->order_by->column == "COUNT(name)");
+        CHECK_FALSE(select->order_by->ascending);
+        REQUIRE(select->limit.has_value());
+        CHECK(*select->limit == 10);
+    }
+
+    SUBCASE("Multiple GROUP BY columns") {
+        DiagnosticEngine diag;
+        auto prog = parse("SELECT type, scope, COUNT(*) FROM components GROUP BY type, scope;", diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+
+        auto* select = dynamic_cast<SelectStatement*>(prog->statements[0].get());
+        REQUIRE(select != nullptr);
+        REQUIRE(select->group_by.size() == 2);
+        CHECK(select->group_by[0] == "type");
+        CHECK(select->group_by[1] == "scope");
+    }
+
+    SUBCASE("Syntax error: Missing BY after GROUP") {
+        DiagnosticEngine diag;
+        auto prog = parse("SELECT severity, COUNT(*) FROM vulnerabilities GROUP severity;", diag);
+        CHECK(diag.has_errors());
+    }
+
+    SUBCASE("Syntax error: Missing closing parenthesis in COUNT") {
+        DiagnosticEngine diag;
+        auto prog = parse("SELECT COUNT(* FROM components;", diag);
+        CHECK(diag.has_errors());
+    }
+}

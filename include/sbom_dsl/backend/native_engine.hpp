@@ -40,6 +40,7 @@ private:
     std::vector<nlohmann::json> eval_hash_join(const IRHashJoin& join, DiagnosticEngine& diag);
     std::vector<nlohmann::json> eval_graph_traverse(const IRGraphTraverse& traverse, DiagnosticEngine& diag);
     QueryResult eval_blast_radius(const IRBlastRadius& blast, DiagnosticEngine& diag);
+    std::vector<nlohmann::json> eval_aggregate(const IRAggregate& agg, DiagnosticEngine& diag);
 
     nlohmann::json bom_data_;
     std::string loaded_file_path_;

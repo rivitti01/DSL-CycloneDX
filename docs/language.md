@@ -31,6 +31,7 @@ SELECT <projections>
 FROM <collection>
 [IN "<sbom_file.json>"]
 [WHERE <condition>]
+[GROUP BY <field1> [, <field2> ...]]
 [ORDER BY <field> [ASC | DESC]]
 [LIMIT <number>];
 ```
@@ -41,9 +42,11 @@ FROM <collection>
 - `dependencies`: Direct dependency graph (`ref` and `dependsOn`).
 - `metadata.component`: Information regarding the primary application or root system.
 
-### 2.3 Projections
-- `SELECT *` selects all available fields.
+### 2.3 Projections and Aggregations
+- `SELECT *` selects all available fields (only valid without `GROUP BY` or aggregates).
 - `SELECT field1, field2, ...` selects only the specified fields (e.g., `name, version, type, purl`).
+- `COUNT(*)` returns the total count of rows in each group (or entire collection if no `GROUP BY`).
+- `COUNT(<column>)` counts all rows in the group where `<column>` is defined (non-null).
 
 ### 2.4 Filter Conditions (`WHERE`)
 Supports comprehensive logical and relational expressions:
@@ -55,7 +58,11 @@ Supports comprehensive logical and relational expressions:
   - `CONTAINS`: case-insensitive substring search (e.g., `purl CONTAINS 'npm'` or `name CONTAINS 'log4j'`).
   - `MATCHES`: regular expression matching (e.g., `description MATCHES 'JNDI.*LDAP'`).
 
-### 2.5 Examples
+### 2.5 Grouping (`GROUP BY`)
+- Aggregates records by one or more specified attributes.
+- **Relational constraint**: All non-aggregate projected columns must be declared in the `GROUP BY` clause.
+
+### 2.6 Examples
 ```sql
 -- All libraries ordered by name
 SELECT name, version, purl
@@ -64,15 +71,22 @@ WHERE type = 'library'
 ORDER BY name ASC
 LIMIT 10;
 
--- Pattern matching on library names and purl
-SELECT name, version
+-- Scalar aggregation: count components of type 'library'
+SELECT COUNT(*)
 FROM components
-WHERE name LIKE 'exp%' AND purl CONTAINS 'npm';
+WHERE type = 'library';
 
--- Vulnerabilities with high CVSS score
-SELECT id, cvss-severity, score
+-- Grouped aggregation: count vulnerabilities by CVSS severity
+SELECT severity, COUNT(*)
 FROM vulnerabilities
-WHERE score >= 7.5 AND (severity = CRITICAL OR severity = HIGH);
+GROUP BY severity
+ORDER BY severity ASC;
+
+-- Grouped aggregation: component distribution by type
+SELECT type, COUNT(*)
+FROM components
+GROUP BY type
+ORDER BY type ASC;
 ```
 
 ---

@@ -16,7 +16,8 @@ enum class IRNodeType {
     Limit,
     HashJoin,
     GraphTraverse,
-    BlastRadius
+    BlastRadius,
+    Aggregate
 };
 
 std::string_view ir_node_type_name(IRNodeType type);
@@ -144,6 +145,32 @@ public:
 
     std::unique_ptr<IRNode> child;
     std::string vulnerability_id;
+};
+
+struct AggregateFunction {
+    enum class Kind {
+        Count
+    };
+    Kind kind{Kind::Count};
+    std::string argument;      // "*" or column name like "name"
+    std::string result_column; // e.g. "COUNT(*)" or "COUNT(name)"
+};
+
+class IRAggregate : public IRNode {
+public:
+    IRAggregate(std::unique_ptr<IRNode> child,
+                std::vector<std::string> group_by_columns,
+                std::vector<AggregateFunction> aggregates)
+        : child(std::move(child)),
+          group_by_columns(std::move(group_by_columns)),
+          aggregates(std::move(aggregates)) {}
+
+    IRNodeType type() const override { return IRNodeType::Aggregate; }
+    std::string description() const override;
+
+    std::unique_ptr<IRNode> child;
+    std::vector<std::string> group_by_columns;
+    std::vector<AggregateFunction> aggregates;
 };
 
 struct IRPlan {

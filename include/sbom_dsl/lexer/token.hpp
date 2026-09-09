@@ -22,12 +22,14 @@ enum class TokenType {
     KwSelect,
     KwFrom,
     KwWhere,
-    KwOrder,
+    KwGroup,
     KwBy,
+    KwOrder,
     KwAsc,
     KwDesc,
     KwLimit,
     KwIn,
+    KwCount,
 
     // Security & Domain Keywords
     KwWho,

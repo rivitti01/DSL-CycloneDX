@@ -57,7 +57,7 @@ The compilation pipeline strictly follows classical compiler engineering phases:
       ↓
 [ Query Lowerer ]          → AST lowering to relational/graph IR plan
       ↓
-[ Intermediate Rep (IR) ]  → Scan, Filter, Project, Sort, Limit, HashJoin, GraphTraverse, BlastRadius
+[ Intermediate Rep (IR) ]  → Scan, Filter, Project, Sort, Limit, HashJoin, GraphTraverse, BlastRadius, Aggregate
       ↓
   +---+---------------------------+
   |                               |
@@ -76,8 +76,8 @@ For more details, consult [docs/architecture.md](docs/architecture.md).
 
 ## Language Features
 
-### 1. Basic SQL-like Queries
-Allows projecting and filtering components, vulnerabilities, and dependencies using comparison and string pattern matching operators (`=`, `!=`, `<`, `>`, `LIKE`, `CONTAINS`):
+### 1. Basic SQL-like Queries and Aggregations
+Allows projecting, filtering, aggregating (`COUNT(*)`, `COUNT(col)`), and grouping (`GROUP BY`) components, vulnerabilities, and dependencies using comparison and string pattern matching operators (`=`, `!=`, `<`, `>`, `LIKE`, `CONTAINS`):
 ```sql
 SELECT name, version, purl
 FROM components
@@ -85,6 +85,12 @@ IN "bom.json"
 WHERE type = 'library' AND (name LIKE 'exp%' OR purl CONTAINS 'lodash')
 ORDER BY name ASC
 LIMIT 10;
+
+-- Aggregations & Grouping
+SELECT severity, COUNT(*)
+FROM vulnerabilities
+GROUP BY severity
+ORDER BY severity ASC;
 ```
 
 ### 2. Advanced Security Constructs (30L)

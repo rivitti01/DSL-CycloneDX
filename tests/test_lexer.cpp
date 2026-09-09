@@ -199,3 +199,28 @@ TEST_CASE("Lexer: Policy assertion keywords (ASSERT, NO, VULNERABILITIES)") {
     CHECK(tokens2[2].type == TokenType::KwComponents);
 }
 
+TEST_CASE("Lexer: Aggregation and Grouping keywords (COUNT, GROUP, BY)") {
+    DiagnosticEngine diag;
+    std::string source = "COUNT count Count GROUP group Group BY by By";
+    Lexer lexer(source, "test.dsl", diag);
+    auto tokens = lexer.tokenize();
+
+    CHECK_FALSE(diag.has_errors());
+    REQUIRE(tokens.size() == 10); // 9 keywords + EOF
+
+    CHECK(tokens[0].type == TokenType::KwCount);
+    CHECK(tokens[1].type == TokenType::KwCount);
+    CHECK(tokens[2].type == TokenType::KwCount);
+    CHECK(tokens[3].type == TokenType::KwGroup);
+    CHECK(tokens[4].type == TokenType::KwGroup);
+    CHECK(tokens[5].type == TokenType::KwGroup);
+    CHECK(tokens[6].type == TokenType::KwBy);
+    CHECK(tokens[7].type == TokenType::KwBy);
+    CHECK(tokens[8].type == TokenType::KwBy);
+    CHECK(tokens[9].type == TokenType::EndOfFile);
+
+    for (size_t i = 0; i < 9; ++i) {
+        CHECK(tokens[i].is_keyword());
+    }
+}
+

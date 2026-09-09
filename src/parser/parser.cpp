@@ -220,18 +220,36 @@ std::unique_ptr<SelectStatement> Parser::parse_select_statement() {
     SourceLocation loc = previous().location; // KwSelect location
     auto stmt = std::make_unique<SelectStatement>(loc);
 
-    // Projections: '*' or list of columns
+    // Projections: '*' or list of columns / aggregates
     if (match(TokenType::Star)) {
         // empty projections vector signifies '*'
     } else {
         do {
-            auto path = parse_column_path();
-            std::string full;
-            for (size_t i = 0; i < path.size(); ++i) {
-                if (i > 0) full += ".";
-                full += path[i];
+            if (match(TokenType::KwCount)) {
+                consume(TokenType::LParen, "Expected '(' after 'COUNT'");
+                std::string arg;
+                if (match(TokenType::Star)) {
+                    arg = "*";
+                } else if (check(TokenType::Identifier) || peek().is_keyword()) {
+                    auto path = parse_column_path();
+                    for (size_t i = 0; i < path.size(); ++i) {
+                        if (i > 0) arg += ".";
+                        arg += path[i];
+                    }
+                } else {
+                    diag_.error(peek().location, "Expected '*' or column name in COUNT(...)");
+                }
+                consume(TokenType::RParen, "Expected ')' after COUNT argument");
+                stmt->projections.push_back("COUNT(" + arg + ")");
+            } else {
+                auto path = parse_column_path();
+                std::string full;
+                for (size_t i = 0; i < path.size(); ++i) {
+                    if (i > 0) full += ".";
+                    full += path[i];
+                }
+                stmt->projections.push_back(full);
             }
-            stmt->projections.push_back(full);
         } while (match(TokenType::Comma));
     }
 
@@ -263,14 +281,52 @@ std::unique_ptr<SelectStatement> Parser::parse_select_statement() {
         stmt->bom_path = file_tok.lexeme;
     }
 
+    // Optional GROUP BY clause
+    if (match(TokenType::KwGroup)) {
+        consume(TokenType::KwBy, "Expected 'BY' after 'GROUP'");
+        do {
+            auto path = parse_column_path();
+            std::string full;
+            for (size_t i = 0; i < path.size(); ++i) {
+                if (i > 0) full += ".";
+                full += path[i];
+            }
+            stmt->group_by.push_back(full);
+        } while (match(TokenType::Comma));
+    }
+
+    // Optional IN "bom.json" after GROUP BY
+    if (!stmt->bom_path && match(TokenType::KwIn)) {
+        const Token& file_tok = consume(TokenType::StringLiteral, "Expected string literal for file path after 'IN'");
+        stmt->bom_path = file_tok.lexeme;
+    }
+
     // Optional ORDER BY
     if (match(TokenType::KwOrder)) {
         consume(TokenType::KwBy, "Expected 'BY' after 'ORDER'");
-        auto order_col_path = parse_column_path();
         std::string order_col;
-        for (size_t i = 0; i < order_col_path.size(); ++i) {
-            if (i > 0) order_col += ".";
-            order_col += order_col_path[i];
+        if (match(TokenType::KwCount)) {
+            consume(TokenType::LParen, "Expected '(' after 'COUNT'");
+            std::string arg;
+            if (match(TokenType::Star)) {
+                arg = "*";
+            } else if (check(TokenType::Identifier) || peek().is_keyword()) {
+                auto path = parse_column_path();
+                for (size_t i = 0; i < path.size(); ++i) {
+                    if (i > 0) arg += ".";
+                    arg += path[i];
+                }
+            } else {
+                diag_.error(peek().location, "Expected '*' or column name in COUNT(...)");
+            }
+            consume(TokenType::RParen, "Expected ')' after COUNT argument");
+            order_col = "COUNT(" + arg + ")";
+        } else {
+            auto order_col_path = parse_column_path();
+            for (size_t i = 0; i < order_col_path.size(); ++i) {
+                if (i > 0) order_col += ".";
+                order_col += order_col_path[i];
+            }
         }
         bool asc = true;
         if (match(TokenType::KwDesc)) {

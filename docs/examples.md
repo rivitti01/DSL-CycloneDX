@@ -394,4 +394,52 @@ Status: COMPLIANT (0 offending records detected in SBOM)
 Total: 0 violations [Backend: Native CycloneDX Engine, Time: 0.11 ms]
 ```
 
+---
+
+## Example 7: Aggregations and GROUP BY Analysis
+
+### Scenario A: Scalar Component Counting
+Count all libraries declared in the SBOM:
+```bash
+./build/sbom-dsl -b tests/fixtures/sample_cyclonedx.json -c "SELECT COUNT(*) FROM components WHERE type = 'library';"
+```
+```text
++----------+
+| COUNT(*) |
++==========+
+| 5        |
++----------+
+Total: 1 row(s) [Backend: Native CycloneDX Engine, Time: 0.15 ms]
+```
+
+### Scenario B: Grouped Vulnerability Breakdown by Severity
+Group all vulnerabilities by severity and order alphabetically:
+```bash
+./build/sbom-dsl -b tests/fixtures/sample_cyclonedx.json -c "SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity ORDER BY severity ASC;"
+```
+```text
++----------+----------+
+| severity | COUNT(*) |
++==========+==========+
+| critical | 1        |
+| high     | 1        |
++----------+----------+
+Total: 2 row(s) [Backend: Native CycloneDX Engine, Time: 0.16 ms]
+```
+
+### Scenario C: Component Distribution by Type
+Group all components in the inventory by their CycloneDX component type:
+```bash
+./build/sbom-dsl -b tests/fixtures/sample_cyclonedx.json -c "SELECT type, COUNT(*) FROM components GROUP BY type ORDER BY type ASC;"
+```
+```text
++-------------+----------+
+| type        | COUNT(*) |
++=============+==========+
+| application | 1        |
+| library     | 5        |
++-------------+----------+
+Total: 2 row(s) [Backend: Native CycloneDX Engine, Time: 0.15 ms]
+```
+
 

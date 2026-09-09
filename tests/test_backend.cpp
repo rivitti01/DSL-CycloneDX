@@ -401,7 +401,9 @@ TEST_CASE("Backend: Functional Equivalence with IROptimizer") {
             "FIND BLAST RADIUS OF 'CVE-2022-29244';",
             "SELECT name FROM components WHERE 1 = 1 AND (name LIKE 'exp%' OR name = 'lodash');",
             "ASSERT NO VULNERABILITIES SEVERITY > 10.0;",
-            "ASSERT NO COMPONENTS WHERE type = 'framework';"
+            "ASSERT NO COMPONENTS WHERE type = 'framework';",
+            "SELECT COUNT(*) FROM components;",
+            "SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity ORDER BY severity ASC;"
         };
 
         for (const auto& q : queries) {
@@ -413,6 +415,90 @@ TEST_CASE("Backend: Functional Equivalence with IROptimizer") {
             CHECK(res_unopt.is_assertion == res_opt.is_assertion);
             CHECK(res_unopt.assertion_passed == res_opt.assertion_passed);
         }
+    }
+}
+
+TEST_CASE("Backend: Aggregations and GROUP BY") {
+    SUBCASE("SELECT COUNT(*) FROM components (scalar aggregate on full inventory)") {
+        auto res = run_query("SELECT COUNT(*) FROM components;");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.columns.size() == 1);
+        CHECK(res.columns[0] == "COUNT(*)");
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "6"); // 5 libraries + 1 root application
+    }
+
+    SUBCASE("SELECT COUNT(*) FROM components with WHERE filter") {
+        auto res = run_query("SELECT COUNT(*) FROM components WHERE type = 'library';");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.columns.size() == 1);
+        CHECK(res.columns[0] == "COUNT(*)");
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "5");
+    }
+
+    SUBCASE("SELECT COUNT(purl) FROM components (counts non-null values)") {
+        // 5 libraries have purl; root application does not have purl
+        auto res = run_query("SELECT COUNT(purl) FROM components;");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.columns.size() == 1);
+        CHECK(res.columns[0] == "COUNT(purl)");
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "5");
+    }
+
+    SUBCASE("SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity ORDER BY severity ASC") {
+        auto res = run_query("SELECT severity, COUNT(*) FROM vulnerabilities GROUP BY severity ORDER BY severity ASC;");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.columns.size() == 2);
+        CHECK(res.columns[0] == "severity");
+        CHECK(res.columns[1] == "COUNT(*)");
+        REQUIRE(res.rows.size() == 2);
+
+        CHECK(res.rows[0][0] == "critical");
+        CHECK(res.rows[0][1] == "1");
+        CHECK(res.rows[1][0] == "high");
+        CHECK(res.rows[1][1] == "1");
+    }
+
+    SUBCASE("SELECT type, COUNT(*) FROM components GROUP BY type ORDER BY type ASC") {
+        auto res = run_query("SELECT type, COUNT(*) FROM components GROUP BY type ORDER BY type ASC;");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.columns.size() == 2);
+        CHECK(res.columns[0] == "type");
+        CHECK(res.columns[1] == "COUNT(*)");
+        REQUIRE(res.rows.size() == 2);
+
+        CHECK(res.rows[0][0] == "application");
+        CHECK(res.rows[0][1] == "1");
+        CHECK(res.rows[1][0] == "library");
+        CHECK(res.rows[1][1] == "5");
+    }
+
+    SUBCASE("Scalar aggregate on empty set yields single row with 0") {
+        auto res = run_query("SELECT COUNT(*) FROM components WHERE 1 = 0;");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.columns.size() == 1);
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "0");
+    }
+
+    SUBCASE("Grouped aggregate on empty set yields 0 rows") {
+        auto res = run_query("SELECT type, COUNT(*) FROM components WHERE 1 = 0 GROUP BY type;");
+        CHECK(res.rows.empty());
+    }
+
+    SUBCASE("Non-mappable query in sbom-utility (COUNT/GROUP BY)") {
+        DiagnosticEngine diag;
+        QueryLowerer lowerer;
+        Lexer lex("SELECT COUNT(*) FROM components;", "test.dsl", diag);
+        Parser parser(lex.tokenize(), diag);
+        auto prog = parser.parse_program();
+        auto plan = lowerer.lower(*prog->statements[0]);
+
+        std::string reason;
+        CHECK_FALSE(SbomUtilityCodeGen::can_offload(plan, &reason));
+        CHECK(reason.find("aggregation") != std::string::npos);
     }
 }
 

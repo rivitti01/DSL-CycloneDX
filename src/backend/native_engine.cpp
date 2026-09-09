@@ -151,6 +151,10 @@ nlohmann::json NativeEngine::resolve_field(const std::vector<std::string>& path,
         full_key += path[i];
     }
 
+    if (item.is_object() && item.contains(full_key)) {
+        return item[full_key];
+    }
+
     if (full_key == "severity" || full_key == "cvss-severity" || full_key == "ratings.severity") {
         if (item.contains("ratings") && item["ratings"].is_array() && !item["ratings"].empty()) {
             return item["ratings"][0].value("severity", "");
@@ -367,8 +371,11 @@ std::vector<nlohmann::json> NativeEngine::eval_filter(const IRFilter& filter, Di
 std::vector<nlohmann::json> NativeEngine::eval_sort(const IRSort& sort, DiagnosticEngine& diag) {
     auto items = evaluate_ir_node(*sort.child, diag);
     std::sort(items.begin(), items.end(), [&](const nlohmann::json& a, const nlohmann::json& b) {
-        nlohmann::json va = a.value(sort.column, "");
-        nlohmann::json vb = b.value(sort.column, "");
+        nlohmann::json va = resolve_field({sort.column}, a);
+        nlohmann::json vb = resolve_field({sort.column}, b);
+        if (va.is_null() && vb.is_null()) return false;
+        if (va.is_null()) return false;
+        if (vb.is_null()) return true;
         if (sort.ascending) {
             return va < vb;
         } else {
@@ -706,6 +713,105 @@ QueryResult NativeEngine::eval_blast_radius(const IRBlastRadius& blast, Diagnost
     return res;
 }
 
+std::vector<nlohmann::json> NativeEngine::eval_aggregate(const IRAggregate& agg, DiagnosticEngine& diag) {
+    auto items = evaluate_ir_node(*agg.child, diag);
+
+    // Case 1: Global scalar aggregation (no GROUP BY columns)
+    if (agg.group_by_columns.empty()) {
+        nlohmann::json row = nlohmann::json::object();
+        for (const auto& func : agg.aggregates) {
+            int64_t count = 0;
+            if (func.kind == AggregateFunction::Kind::Count) {
+                if (func.argument == "*") {
+                    count = static_cast<int64_t>(items.size());
+                } else {
+                    for (const auto& item : items) {
+                        nlohmann::json val = resolve_field({func.argument}, item);
+                        if (!val.is_null()) {
+                            count++;
+                        }
+                    }
+                }
+            }
+            row[func.result_column] = count;
+        }
+        return { row };
+    }
+
+    // Case 2: Grouped aggregation (GROUP BY columns specified)
+    struct GroupBucket {
+        std::vector<nlohmann::json> key_values;
+        std::vector<int64_t> counts;
+    };
+
+    std::vector<std::string> group_order;
+    std::unordered_map<std::string, GroupBucket> buckets;
+
+    for (const auto& item : items) {
+        std::string composite_key;
+        std::vector<nlohmann::json> key_vals;
+        key_vals.reserve(agg.group_by_columns.size());
+
+        for (size_t i = 0; i < agg.group_by_columns.size(); ++i) {
+            nlohmann::json val = resolve_field({agg.group_by_columns[i]}, item);
+            std::string s_val;
+            if (val.is_null()) {
+                s_val = "null";
+            } else if (val.is_string()) {
+                s_val = val.get<std::string>();
+            } else {
+                s_val = val.dump();
+            }
+            if (i > 0) composite_key += "||";
+            composite_key += s_val;
+            key_vals.push_back(val);
+        }
+
+        auto it = buckets.find(composite_key);
+        if (it == buckets.end()) {
+            group_order.push_back(composite_key);
+            GroupBucket b;
+            b.key_values = std::move(key_vals);
+            b.counts.resize(agg.aggregates.size(), 0);
+            it = buckets.emplace(composite_key, std::move(b)).first;
+        }
+
+        for (size_t i = 0; i < agg.aggregates.size(); ++i) {
+            const auto& func = agg.aggregates[i];
+            if (func.kind == AggregateFunction::Kind::Count) {
+                if (func.argument == "*") {
+                    it->second.counts[i]++;
+                } else {
+                    nlohmann::json val = resolve_field({func.argument}, item);
+                    if (!val.is_null()) {
+                        it->second.counts[i]++;
+                    }
+                }
+            }
+        }
+    }
+
+    std::vector<nlohmann::json> result;
+    result.reserve(group_order.size());
+
+    for (const auto& key : group_order) {
+        const auto& bucket = buckets[key];
+        nlohmann::json row = nlohmann::json::object();
+
+        for (size_t i = 0; i < agg.group_by_columns.size(); ++i) {
+            row[agg.group_by_columns[i]] = bucket.key_values[i];
+        }
+
+        for (size_t i = 0; i < agg.aggregates.size(); ++i) {
+            row[agg.aggregates[i].result_column] = bucket.counts[i];
+        }
+
+        result.push_back(std::move(row));
+    }
+
+    return result;
+}
+
 std::vector<nlohmann::json> NativeEngine::evaluate_ir_node(const IRNode& node, DiagnosticEngine& diag) {
     switch (node.type()) {
         case IRNodeType::Scan:
@@ -720,6 +826,8 @@ std::vector<nlohmann::json> NativeEngine::evaluate_ir_node(const IRNode& node, D
             return eval_hash_join(static_cast<const IRHashJoin&>(node), diag);
         case IRNodeType::GraphTraverse:
             return eval_graph_traverse(static_cast<const IRGraphTraverse&>(node), diag);
+        case IRNodeType::Aggregate:
+            return eval_aggregate(static_cast<const IRAggregate&>(node), diag);
         case IRNodeType::Project:
         case IRNodeType::BlastRadius:
             // Handled in execute()

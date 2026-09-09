@@ -61,11 +61,63 @@ void TypeChecker::visit(SelectStatement& node) {
                     "'. Valid collections are: components, vulnerabilities, dependencies, metadata.component, services");
     }
 
+    bool has_agg = node.has_aggregates();
+    bool has_grp = node.has_group_by();
+
     // Check projections
-    for (const auto& proj : node.projections) {
-        if (!catalog_.is_valid_field(node.collection, proj)) {
-            diag_.warning(node.location, "Field '" + proj + "' is not declared in CycloneDX schema for '" + 
-                          node.collection + "' (will be resolved dynamically)");
+    if (node.projections.empty()) {
+        if (has_grp) {
+            diag_.error(node.location, "Wildcard '*' cannot be used with GROUP BY clause");
+        } else if (has_agg) {
+            diag_.error(node.location, "Wildcard '*' cannot be combined with aggregate functions");
+        }
+    } else {
+        for (const auto& proj : node.projections) {
+            std::string func_name, arg;
+            bool is_agg = is_aggregate_expression(proj, &func_name, &arg);
+
+            if (is_agg) {
+                if (arg != "*" && !arg.empty()) {
+                    if (!catalog_.is_valid_field(node.collection, arg)) {
+                        diag_.warning(node.location, "Argument '" + arg + "' in " + func_name + 
+                                      "(...) is not declared in CycloneDX schema for '" + node.collection + "'");
+                    }
+                }
+            } else {
+                if (!catalog_.is_valid_field(node.collection, proj)) {
+                    diag_.warning(node.location, "Field '" + proj + "' is not declared in CycloneDX schema for '" + 
+                                  node.collection + "' (will be resolved dynamically)");
+                }
+
+                // If GROUP BY is present, non-aggregate columns must be in group_by
+                if (has_grp) {
+                    bool in_group = false;
+                    for (const auto& g_col : node.group_by) {
+                        if (g_col == proj) {
+                            in_group = true;
+                            break;
+                        }
+                    }
+                    if (!in_group) {
+                        diag_.error(node.location, "Column '" + proj + 
+                                    "' must appear in the GROUP BY clause or be used in an aggregate function");
+                    }
+                } else if (has_agg) {
+                    // If aggregate is present without GROUP BY, non-aggregate columns are illegal
+                    diag_.error(node.location, "Column '" + proj + 
+                                "' must appear in the GROUP BY clause or be used in an aggregate function");
+                }
+            }
+        }
+    }
+
+    // Check GROUP BY columns
+    if (has_grp) {
+        for (const auto& g_col : node.group_by) {
+            if (!catalog_.is_valid_field(node.collection, g_col)) {
+                diag_.warning(node.location, "GROUP BY column '" + g_col + 
+                              "' is not a standard field of '" + node.collection + "'");
+            }
         }
     }
 
@@ -81,9 +133,11 @@ void TypeChecker::visit(SelectStatement& node) {
 
     // Check ORDER BY
     if (node.order_by) {
-        if (!catalog_.is_valid_field(node.collection, node.order_by->column)) {
-            diag_.warning(node.location, "ORDER BY column '" + node.order_by->column + 
-                          "' is not a standard field of '" + node.collection + "'");
+        if (!is_aggregate_expression(node.order_by->column)) {
+            if (!catalog_.is_valid_field(node.collection, node.order_by->column)) {
+                diag_.warning(node.location, "ORDER BY column '" + node.order_by->column + 
+                              "' is not a standard field of '" + node.collection + "'");
+            }
         }
     }
 
