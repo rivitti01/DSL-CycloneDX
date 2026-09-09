@@ -15,6 +15,7 @@ public:
     IRPlan lower_find_vulnerable(FindVulnerableStatement& stmt);
     IRPlan lower_show_tree(ShowTreeStatement& stmt);
     IRPlan lower_blast_radius(BlastRadiusStatement& stmt);
+    IRPlan lower_assert(AssertStatement& stmt);
 
 private:
     std::unique_ptr<ExpressionNode> clone_expression(const ExpressionNode* expr);

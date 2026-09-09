@@ -5,6 +5,7 @@
 #include "sbom_dsl/semantic/type_checker.hpp"
 #include "sbom_dsl/lowering/query_lowerer.hpp"
 #include "sbom_dsl/backend/native_engine.hpp"
+#include <cstdlib>
 
 using namespace sbom_dsl;
 
@@ -94,5 +95,62 @@ TEST_CASE("End-to-End: Full Compiler Pipeline") {
         CHECK(res.rows[0][1] == "4.17.1");
         CHECK(res.rows[1][0] == "log4j-core");
         CHECK(res.rows[1][1] == "2.14.1");
+    }
+
+    SUBCASE("Policy Gatekeeper: ASSERT NO VULNERABILITIES pass and fail") {
+        // Assert passing: score > 10.0 (no vulnerability has CVSS score > 10.0)
+        auto res_pass = run_e2e("ASSERT NO VULNERABILITIES SEVERITY > 10.0;");
+        CHECK(res_pass.is_assertion);
+        CHECK(res_pass.assertion_passed);
+        CHECK(res_pass.rows.empty());
+
+        // Assert failing: SEVERITY >= HIGH matches log4j-core (CRITICAL, score 10.0) and qs (HIGH, score 7.5)
+        auto res_fail = run_e2e("ASSERT NO VULNERABILITIES SEVERITY >= HIGH;");
+        CHECK(res_fail.is_assertion);
+        CHECK_FALSE(res_fail.assertion_passed);
+        CHECK(res_fail.rows.size() == 2);
+        CHECK(res_fail.rows[0][0] == "log4j-core");
+        CHECK(res_fail.rows[1][0] == "qs");
+
+        // Assert failing with level: SEVERITY = CRITICAL matches log4j-core
+        auto res_crit = run_e2e("ASSERT NO VULNERABILITIES SEVERITY = CRITICAL;");
+        CHECK(res_crit.is_assertion);
+        CHECK_FALSE(res_crit.assertion_passed);
+        CHECK(res_crit.rows.size() == 1);
+        CHECK(res_crit.rows[0][0] == "log4j-core");
+    }
+
+    SUBCASE("Policy Gatekeeper: ASSERT NO COMPONENTS / LIBRARIES") {
+        // Passing: no framework components in fixture
+        auto res_comp_pass = run_e2e("ASSERT NO COMPONENTS WHERE type = 'framework';");
+        CHECK(res_comp_pass.is_assertion);
+        CHECK(res_comp_pass.assertion_passed);
+        CHECK(res_comp_pass.rows.empty());
+
+        // Failing: library express exists
+        auto res_comp_fail = run_e2e("ASSERT NO COMPONENTS WHERE name = 'express';");
+        CHECK(res_comp_fail.is_assertion);
+        CHECK_FALSE(res_comp_fail.assertion_passed);
+        CHECK(res_comp_fail.rows.size() == 1);
+        CHECK(res_comp_fail.rows[0][0] == "express");
+
+        // Passing with LIBRARIES: no library named 'my-web-app' (my-web-app is an application)
+        auto res_lib_pass = run_e2e("ASSERT NO LIBRARIES WHERE name = 'my-web-app';");
+        CHECK(res_lib_pass.is_assertion);
+        CHECK(res_lib_pass.assertion_passed);
+        CHECK(res_lib_pass.rows.empty());
+    }
+
+    SUBCASE("CLI Gatekeeper exit codes (0 on compliance, 1 on violation)") {
+        // Run passing query
+        std::string cmd_pass = "./sbom-dsl -b \"" + FIXTURE + "\" -c \"ASSERT NO VULNERABILITIES SEVERITY > 10.0;\" > /dev/null 2>&1";
+        int ret_pass = std::system(cmd_pass.c_str());
+        CHECK(ret_pass == 0);
+
+        // Run failing query
+        std::string cmd_fail = "./sbom-dsl -b \"" + FIXTURE + "\" -c \"ASSERT NO VULNERABILITIES SEVERITY >= HIGH;\" > /dev/null 2>&1";
+        int ret_fail = std::system(cmd_fail.c_str());
+        int exit_code = (ret_fail >= 0 && ret_fail <= 255) ? ret_fail : (ret_fail >> 8);
+        CHECK(exit_code == 1);
     }
 }

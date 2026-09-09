@@ -22,6 +22,7 @@ private:
     std::unique_ptr<FindVulnerableStatement> parse_find_vulnerable_statement();
     std::unique_ptr<ShowTreeStatement> parse_show_tree_statement();
     std::unique_ptr<BlastRadiusStatement> parse_blast_radius_statement();
+    std::unique_ptr<AssertStatement> parse_assert_statement();
 
     // Expression parser (Pratt Precedence Climbing)
     std::unique_ptr<ExpressionNode> parse_expression(int min_precedence = 0);

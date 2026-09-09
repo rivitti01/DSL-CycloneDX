@@ -149,6 +149,8 @@ public:
 struct IRPlan {
     std::unique_ptr<IRNode> root;
     std::optional<std::string> bom_path;
+    bool is_assertion{false};
+    std::string assertion_title;
 };
 
 } // namespace sbom_dsl

@@ -19,6 +19,7 @@ public:
     void visit(FindVulnerableStatement& node) override;
     void visit(ShowTreeStatement& node) override;
     void visit(BlastRadiusStatement& node) override;
+    void visit(AssertStatement& node) override;
 
     void visit(BinaryOpExpr& node) override;
     void visit(UnaryOpExpr& node) override;

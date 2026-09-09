@@ -95,6 +95,7 @@ LIMIT 10;
 | `FIND VULNERABLE LIBRARIES SEVERITY >= HIGH;` | Performs relational join between vulnerability catalog (VEX/VDR) and components. | `Project -> HashJoin(affects == bom-ref) -> Filter(vulns) / Filter(comps)` |
 | `SHOW TREE OF "app" DEPTH 2;` | Visual inspection of direct and transitive dependency hierarchy. | `Project -> HashJoin -> GraphTraverse(Forward, depth=2) -> Scan(dependencies)` |
 | `FIND BLAST RADIUS OF "CVE-...";` | Computes supply chain impact percentage and root application exposure. | `BlastRadius -> ReverseReachability -> Scan(vulnerabilities)` |
+| `ASSERT NO VULNERABILITIES SEVERITY >= HIGH;` | CI/CD gatekeeping: returns exit code `0` on compliance or `1` with violating records. | `Project -> HashJoin -> Filter(vulns) -> Scan(components)` |
 
 For more details, consult [docs/advanced-features.md](docs/advanced-features.md) and [docs/language.md](docs/language.md).
 

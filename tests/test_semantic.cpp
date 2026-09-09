@@ -105,4 +105,27 @@ TEST_CASE("Semantic Analysis: Semantic Errors") {
         CHECK_FALSE(ok3);
         CHECK(diag3.has_errors());
     }
+
+    SUBCASE("Policy assert: Valid ASSERT NO statements") {
+        DiagnosticEngine diag;
+        CHECK(check_semantic("ASSERT NO VULNERABILITIES SEVERITY >= CRITICAL;", diag));
+        CHECK(check_semantic("ASSERT NO VULNERABILITIES SEVERITY > 10.0;", diag));
+        CHECK(check_semantic("ASSERT NO COMPONENTS WHERE type = 'framework';", diag));
+        CHECK(check_semantic("ASSERT NO LIBRARIES;", diag));
+        CHECK_FALSE(diag.has_errors());
+    }
+
+    SUBCASE("Policy assert: Invalid SEVERITY on COMPONENTS") {
+        DiagnosticEngine diag;
+        bool ok = check_semantic("ASSERT NO COMPONENTS SEVERITY >= HIGH;", diag);
+        CHECK_FALSE(ok);
+        CHECK(diag.has_errors());
+    }
+
+    SUBCASE("Policy assert: Negative score threshold") {
+        DiagnosticEngine diag;
+        bool ok = check_semantic("ASSERT NO VULNERABILITIES SEVERITY < -1.0;", diag);
+        CHECK_FALSE(ok);
+        CHECK(diag.has_errors());
+    }
 }

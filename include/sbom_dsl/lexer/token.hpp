@@ -38,6 +38,7 @@ enum class TokenType {
     KwVulnerable,
     KwComponents,
     KwLibraries,
+    KwVulnerabilities,
     KwSeverity,
     KwShow,
     KwTree,
@@ -46,6 +47,8 @@ enum class TokenType {
     KwDepth,
     KwBlast,
     KwRadius,
+    KwAssert,
+    KwNo,
 
     // Logical Operators
     KwAnd,

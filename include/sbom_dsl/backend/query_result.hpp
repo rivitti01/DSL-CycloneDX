@@ -38,7 +38,11 @@ struct QueryResult {
     std::string execution_backend{"NativeEngine"};
     double execution_time_ms{0.0};
 
-    bool is_empty() const { return rows.empty() && !tree_root.has_value() && !blast_radius.has_value(); }
+    bool is_assertion{false};
+    bool assertion_passed{true};
+    std::string assertion_title;
+
+    bool is_empty() const { return rows.empty() && !tree_root.has_value() && !blast_radius.has_value() && !is_assertion; }
     size_t size() const { return rows.size(); }
 };
 

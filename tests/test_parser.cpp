@@ -206,3 +206,90 @@ TEST_CASE("Parser: Pattern matching expressions (LIKE, CONTAINS, MATCHES)") {
     REQUIRE(desc_matches != nullptr);
     CHECK(desc_matches->op == BinaryOperator::Matches);
 }
+
+TEST_CASE("Parser: Policy assertion statements (ASSERT NO ...)") {
+    SUBCASE("ASSERT NO VULNERABILITIES with severity level") {
+        DiagnosticEngine diag;
+        std::string q = "ASSERT NO VULNERABILITIES SEVERITY >= CRITICAL;";
+        auto prog = parse(q, diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+        REQUIRE(prog->statements.size() == 1);
+
+        auto* asrt = dynamic_cast<AssertStatement*>(prog->statements[0].get());
+        REQUIRE(asrt != nullptr);
+        CHECK(asrt->target == AssertTarget::Vulnerabilities);
+        REQUIRE(asrt->severity_op.has_value());
+        CHECK(*asrt->severity_op == BinaryOperator::GreaterEqual);
+        REQUIRE(asrt->severity_level.has_value());
+        CHECK(*asrt->severity_level == SeverityLevel::Critical);
+        CHECK_FALSE(asrt->score_threshold.has_value());
+        CHECK(asrt->where_clause == nullptr);
+    }
+
+    SUBCASE("ASSERT NO VULNERABILITIES with numeric score threshold") {
+        DiagnosticEngine diag;
+        std::string q = "ASSERT NO VULNERABILITIES SEVERITY > 10.0 IN 'bom.json';";
+        auto prog = parse(q, diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+        REQUIRE(prog->statements.size() == 1);
+
+        auto* asrt = dynamic_cast<AssertStatement*>(prog->statements[0].get());
+        REQUIRE(asrt != nullptr);
+        CHECK(asrt->target == AssertTarget::Vulnerabilities);
+        REQUIRE(asrt->severity_op.has_value());
+        CHECK(*asrt->severity_op == BinaryOperator::Greater);
+        REQUIRE(asrt->score_threshold.has_value());
+        CHECK(*asrt->score_threshold == doctest::Approx(10.0));
+        CHECK_FALSE(asrt->severity_level.has_value());
+        REQUIRE(asrt->bom_path.has_value());
+        CHECK(*asrt->bom_path == "bom.json");
+    }
+
+    SUBCASE("ASSERT NO COMPONENTS WHERE clause") {
+        DiagnosticEngine diag;
+        std::string q = "ASSERT NO COMPONENTS WHERE type = 'framework';";
+        auto prog = parse(q, diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+        REQUIRE(prog->statements.size() == 1);
+
+        auto* asrt = dynamic_cast<AssertStatement*>(prog->statements[0].get());
+        REQUIRE(asrt != nullptr);
+        CHECK(asrt->target == AssertTarget::Components);
+        CHECK_FALSE(asrt->severity_level.has_value());
+        REQUIRE(asrt->where_clause != nullptr);
+    }
+
+    SUBCASE("ASSERT NO LIBRARIES simple") {
+        DiagnosticEngine diag;
+        std::string q = "ASSERT NO LIBRARIES;";
+        auto prog = parse(q, diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog != nullptr);
+        REQUIRE(prog->statements.size() == 1);
+
+        auto* asrt = dynamic_cast<AssertStatement*>(prog->statements[0].get());
+        REQUIRE(asrt != nullptr);
+        CHECK(asrt->target == AssertTarget::Libraries);
+    }
+
+    SUBCASE("Parser error: Missing NO after ASSERT") {
+        DiagnosticEngine diag;
+        auto prog = parse("ASSERT VULNERABILITIES;", diag);
+        CHECK(diag.has_errors());
+    }
+
+    SUBCASE("Parser error: Missing target after ASSERT NO") {
+        DiagnosticEngine diag;
+        auto prog = parse("ASSERT NO ;", diag);
+        CHECK(diag.has_errors());
+    }
+
+    SUBCASE("Parser error: Invalid severity level/score") {
+        DiagnosticEngine diag;
+        auto prog = parse("ASSERT NO VULNERABILITIES SEVERITY FOOBAR;", diag);
+        CHECK(diag.has_errors());
+    }
+}

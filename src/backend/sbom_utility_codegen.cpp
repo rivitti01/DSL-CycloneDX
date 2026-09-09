@@ -31,6 +31,11 @@ bool SbomUtilityCodeGen::extract_where_filters(const ExpressionNode* expr, std::
 }
 
 bool SbomUtilityCodeGen::can_offload(const IRPlan& plan, std::string* reason) {
+    if (plan.is_assertion) {
+        if (reason) *reason = "Policy assertions (ASSERT NO) must be verified via native engine";
+        return false;
+    }
+
     if (!plan.root) {
         if (reason) *reason = "Plan has no root node";
         return false;

@@ -54,7 +54,12 @@ void CLIOptions::print_help(const char* prog_name) {
               << "  " << prog_name << " -c \"SELECT name, version FROM components;\" -b bom.json\n"
               << "  " << prog_name << " -c \"WHO USES 'log4j-core' TRANSITIVE;\" -b bom.json\n"
               << "  " << prog_name << " -c \"FIND VULNERABLE LIBRARIES SEVERITY >= HIGH;\" -b bom.json\n"
-              << "  " << prog_name << " query.dsl --explain\n";
+              << "  " << prog_name << " -c \"ASSERT NO VULNERABILITIES SEVERITY >= CRITICAL;\" -b bom.json\n"
+              << "  " << prog_name << " -c \"ASSERT NO COMPONENTS WHERE type = 'framework';\" -b bom.json\n"
+              << "  " << prog_name << " query.dsl --explain\n\n"
+              << "CI/CD Exit Codes:\n"
+              << "  0 = Success / Compliance (all assertions passed)\n"
+              << "  1 = Policy Violation (one or more assertions failed) or Error\n";
 }
 
 void CLIOptions::print_version() {

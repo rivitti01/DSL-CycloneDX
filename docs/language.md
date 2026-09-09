@@ -155,6 +155,45 @@ FIND BLAST RADIUS OF "CVE-2021-44228";
 
 ---
 
+### 3.5 `ASSERT NO` (Policy Enforcement & CI/CD Gatekeeping)
+Enforces security and compliance policies directly within DevSecOps Continuous Integration pipelines (e.g., GitHub Actions, GitLab CI).
+
+```sql
+ASSERT NO <target>
+[SEVERITY [op] <level_or_score>]
+[WHERE <condition>]
+[IN "<file.json>"];
+```
+
+#### Targets (`<target>`)
+- `VULNERABILITIES`: Checks for policy-violating vulnerabilities impacting components in the SBOM.
+- `COMPONENTS`: Checks for prohibited software components (e.g., specific framework, unwanted supplier).
+- `LIBRARIES`: Checks for prohibited third-party libraries.
+
+#### Severity and Score Thresholds
+- **Severity Level**: `SEVERITY >= HIGH`, `SEVERITY = CRITICAL`
+- **CVSS Score**: `SEVERITY > 10.0`, `SEVERITY >= 7.5`
+
+#### CI/CD Exit Code Protocol
+- **Exit Code `0` (Success/Compliant)**: When no matching violating records are found. Stampa un banner di conformità.
+- **Exit Code `1` (Failure/Non-Compliant)**: When one or more policy violations are detected. Stampa la tabella dettagliata dei componenti e vulnerabilità incriminati e termina con codice di uscita 1.
+
+**Examples:**
+```sql
+-- Block pipeline if any critical or high vulnerability is found
+ASSERT NO VULNERABILITIES SEVERITY >= HIGH;
+
+-- Block pipeline if any vulnerability has CVSS score >= 9.0
+ASSERT NO VULNERABILITIES SEVERITY >= 9.0;
+
+-- Disallow framework components
+ASSERT NO COMPONENTS WHERE type = 'framework';
+
+-- Block deprecated or unwanted libraries
+ASSERT NO LIBRARIES WHERE name = 'log4j-core' AND version LIKE '2.14%';
+```
+
+
 ## 4. Execution Modes and Formatting
 
 ### 4.1 Output Formats (`-f`, `--format`)

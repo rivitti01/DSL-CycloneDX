@@ -33,6 +33,7 @@ std::string_view token_type_name(TokenType type) {
         case TokenType::KwVulnerable: return "VULNERABLE";
         case TokenType::KwComponents: return "COMPONENTS";
         case TokenType::KwLibraries: return "LIBRARIES";
+        case TokenType::KwVulnerabilities: return "VULNERABILITIES";
         case TokenType::KwSeverity: return "SEVERITY";
         case TokenType::KwShow: return "SHOW";
         case TokenType::KwTree: return "TREE";
@@ -41,6 +42,8 @@ std::string_view token_type_name(TokenType type) {
         case TokenType::KwDepth: return "DEPTH";
         case TokenType::KwBlast: return "BLAST";
         case TokenType::KwRadius: return "RADIUS";
+        case TokenType::KwAssert: return "ASSERT";
+        case TokenType::KwNo: return "NO";
 
         case TokenType::KwAnd: return "AND";
         case TokenType::KwOr: return "OR";
@@ -100,6 +103,7 @@ std::optional<TokenType> lookup_keyword(std::string_view text) {
         {"VULNERABLE", TokenType::KwVulnerable},
         {"COMPONENTS", TokenType::KwComponents},
         {"LIBRARIES", TokenType::KwLibraries},
+        {"VULNERABILITIES", TokenType::KwVulnerabilities},
         {"SEVERITY", TokenType::KwSeverity},
         {"SHOW", TokenType::KwShow},
         {"TREE", TokenType::KwTree},
@@ -108,6 +112,8 @@ std::optional<TokenType> lookup_keyword(std::string_view text) {
         {"DEPTH", TokenType::KwDepth},
         {"BLAST", TokenType::KwBlast},
         {"RADIUS", TokenType::KwRadius},
+        {"ASSERT", TokenType::KwAssert},
+        {"NO", TokenType::KwNo},
 
         {"AND", TokenType::KwAnd},
         {"OR", TokenType::KwOr},

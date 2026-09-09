@@ -185,6 +185,29 @@ public:
     std::optional<std::string> bom_path;
 };
 
+enum class AssertTarget {
+    Vulnerabilities,
+    Components,
+    Libraries
+};
+
+std::string_view assert_target_to_string(AssertTarget target);
+
+class AssertStatement : public StatementNode {
+public:
+    AssertStatement(AssertTarget target, SourceLocation loc)
+        : StatementNode(std::move(loc)), target(target) {}
+
+    void accept(ASTVisitor& visitor) override;
+
+    AssertTarget target{AssertTarget::Vulnerabilities};
+    std::optional<BinaryOperator> severity_op;
+    std::optional<SeverityLevel> severity_level;
+    std::optional<double> score_threshold;
+    std::unique_ptr<ExpressionNode> where_clause;
+    std::optional<std::string> bom_path;
+};
+
 class ProgramNode : public ASTNode {
 public:
     ProgramNode(SourceLocation loc) : ASTNode(std::move(loc)) {}

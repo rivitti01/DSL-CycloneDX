@@ -15,7 +15,7 @@
 
 using namespace sbom_dsl;
 
-static void execute_query_pipeline(const std::string& source,
+static int execute_query_pipeline(const std::string& source,
                                    const std::string& filename,
                                    const CLIOptions& opts,
                                    NativeEngine& engine) {
@@ -36,7 +36,7 @@ static void execute_query_pipeline(const std::string& source,
 
     if (diag.has_errors()) {
         diag.print_all(std::cerr);
-        return;
+        return 1;
     }
 
     // Stage 2: Parser
@@ -45,7 +45,7 @@ static void execute_query_pipeline(const std::string& source,
 
     if (diag.has_errors() || !program) {
         diag.print_all(std::cerr);
-        return;
+        return 1;
     }
 
     if (opts.explain) {
@@ -73,11 +73,12 @@ static void execute_query_pipeline(const std::string& source,
 
     if (!semantic_ok || diag.has_errors()) {
         diag.print_all(std::cerr);
-        return;
+        return 1;
     }
 
     // Stage 4 & 5: Lowering & Execution per statement
     QueryLowerer lowerer;
+    bool policy_violation = false;
 
     for (size_t i = 0; i < program->statements.size(); ++i) {
         auto& stmt = program->statements[i];
@@ -94,6 +95,8 @@ static void execute_query_pipeline(const std::string& source,
                 if (!tree->bom_path) tree->bom_path = opts.bom_file;
             } else if (auto* blast = dynamic_cast<BlastRadiusStatement*>(stmt.get())) {
                 if (!blast->bom_path) blast->bom_path = opts.bom_file;
+            } else if (auto* asrt = dynamic_cast<AssertStatement*>(stmt.get())) {
+                if (!asrt->bom_path) asrt->bom_path = opts.bom_file;
             }
         }
 
@@ -137,12 +140,19 @@ static void execute_query_pipeline(const std::string& source,
             result = engine.execute(plan, diag);
         }
 
+        if (result.is_assertion && !result.assertion_passed) {
+            policy_violation = true;
+        }
+
         if (diag.has_errors()) {
             diag.print_all(std::cerr);
+            return 1;
         } else {
             std::cout << ResultFormatter::format(result, opts.output_format);
         }
     }
+
+    return policy_violation ? 1 : 0;
 }
 
 static void run_repl(const CLIOptions& base_opts, NativeEngine& engine) {
@@ -232,8 +242,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (opts.inline_query.has_value()) {
-        execute_query_pipeline(*opts.inline_query, "<command_line>", opts, engine);
-        return 0;
+        return execute_query_pipeline(*opts.inline_query, "<command_line>", opts, engine);
     }
 
     if (opts.query_file.has_value()) {
@@ -244,8 +253,7 @@ int main(int argc, char* argv[]) {
         }
         std::ostringstream ss;
         ss << file.rdbuf();
-        execute_query_pipeline(ss.str(), *opts.query_file, opts, engine);
-        return 0;
+        return execute_query_pipeline(ss.str(), *opts.query_file, opts, engine);
     }
 
     return 0;

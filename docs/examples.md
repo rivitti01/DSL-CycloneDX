@@ -296,3 +296,52 @@ Total: 1 row(s) [Backend: Native CycloneDX Engine, Time: 0.22 ms]
 Total: 2 row(s) [Backend: Native CycloneDX Engine, Time: 0.15 ms]
 ```
 
+---
+
+## Example 8: Policy Enforcement & CI/CD Gatekeeping (`ASSERT NO`)
+
+### Scenario A: Compliant Policy (Process Exit Code 0)
+Verify that no vulnerability with CVSS score $> 10.0$ exists in the SBOM:
+```bash
+./build/sbom-dsl -b tests/fixtures/sample_cyclonedx.json -c "ASSERT NO VULNERABILITIES SEVERITY > 10.0;"
+echo "Exit Code: $?"
+```
+```text
+[POLICY ASSERTION PASSED] ASSERT NO VULNERABILITIES SEVERITY > 10
+Status: COMPLIANT (0 offending records detected in SBOM)
+Total: 0 violations [Backend: Native CycloneDX Engine, Time: 0.17 ms]
+Exit Code: 0
+```
+
+### Scenario B: Policy Violation Detected (Process Exit Code 1)
+Enforce that no vulnerability rated `HIGH` or above exists. When violations are detected, the CLI prints the list of offending components/vulnerabilities and exits with `1`:
+```bash
+./build/sbom-dsl -b tests/fixtures/sample_cyclonedx.json -c "ASSERT NO VULNERABILITIES SEVERITY >= HIGH;"
+echo "Exit Code: $?"
+```
+```text
+[POLICY ASSERTION FAILED] ASSERT NO VULNERABILITIES SEVERITY >= HIGH
+Status: NON-COMPLIANT (2 offending record(s) found)
+
++------------+---------+---------+---------+----------+-------+----------------------+
+| name       | version | type    | vuln_id | severity | score | description          |
++============+=========+=========+=========+==========+=======+======================+
+| log4j-core | 2.14.1  | library |         | critical | 10.0  | Apache Log4j Core    |
+| qs         | 6.7.0   | library |         | high     | 7.5   | A querystring parser |
++------------+---------+---------+---------+----------+-------+----------------------+
+Total: 2 row(s) [Backend: Native CycloneDX Engine, Time: 0.16 ms]
+Exit Code: 1
+```
+
+### Scenario C: Component Architectural Policy
+Enforce that no component of type `framework` is present:
+```bash
+./build/sbom-dsl -b tests/fixtures/sample_cyclonedx.json -c "ASSERT NO COMPONENTS WHERE type = 'framework';"
+```
+```text
+[POLICY ASSERTION PASSED] ASSERT NO COMPONENTS
+Status: COMPLIANT (0 offending records detected in SBOM)
+Total: 0 violations [Backend: Native CycloneDX Engine, Time: 0.11 ms]
+```
+
+

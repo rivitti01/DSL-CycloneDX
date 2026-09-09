@@ -42,7 +42,7 @@ TEST_CASE("Lexer: Case insensitivity of keywords") {
     CHECK(tokens[0].type == TokenType::KwSelect);
     CHECK(tokens[1].type == TokenType::Star);
     CHECK(tokens[2].type == TokenType::KwFrom);
-    CHECK(tokens[3].type == TokenType::Identifier);
+    CHECK(tokens[3].type == TokenType::KwVulnerabilities);
     CHECK(tokens[3].lexeme == "vulnerabilities");
     CHECK(tokens[4].type == TokenType::KwWhere);
     CHECK(tokens[5].type == TokenType::Identifier);
@@ -169,3 +169,33 @@ TEST_CASE("Lexer: Pattern matching keywords (LIKE, CONTAINS, MATCHES)") {
         CHECK(tokens[i].is_keyword());
     }
 }
+
+TEST_CASE("Lexer: Policy assertion keywords (ASSERT, NO, VULNERABILITIES)") {
+    DiagnosticEngine diag;
+    std::string source = "ASSERT NO VULNERABILITIES SEVERITY >= CRITICAL;";
+    Lexer lexer(source, "test.dsl", diag);
+    auto tokens = lexer.tokenize();
+
+    CHECK_FALSE(diag.has_errors());
+    REQUIRE(tokens.size() == 8);
+    CHECK(tokens[0].type == TokenType::KwAssert);
+    CHECK(tokens[0].lexeme == "ASSERT");
+    CHECK(tokens[1].type == TokenType::KwNo);
+    CHECK(tokens[1].lexeme == "NO");
+    CHECK(tokens[2].type == TokenType::KwVulnerabilities);
+    CHECK(tokens[2].lexeme == "VULNERABILITIES");
+    CHECK(tokens[3].type == TokenType::KwSeverity);
+    CHECK(tokens[4].type == TokenType::GreaterEqual);
+    CHECK(tokens[5].type == TokenType::KwCritical);
+    CHECK(tokens[6].type == TokenType::Semicolon);
+    CHECK(tokens[7].type == TokenType::EndOfFile);
+
+    std::string source2 = "assert no components where type = 'framework';";
+    Lexer lexer2(source2, "test.dsl", diag);
+    auto tokens2 = lexer2.tokenize();
+    CHECK_FALSE(diag.has_errors());
+    CHECK(tokens2[0].type == TokenType::KwAssert);
+    CHECK(tokens2[1].type == TokenType::KwNo);
+    CHECK(tokens2[2].type == TokenType::KwComponents);
+}
+

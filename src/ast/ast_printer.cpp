@@ -55,6 +55,15 @@ std::optional<SeverityLevel> severity_from_string(std::string_view str) {
     return std::nullopt;
 }
 
+std::string_view assert_target_to_string(AssertTarget target) {
+    switch (target) {
+        case AssertTarget::Vulnerabilities: return "VULNERABILITIES";
+        case AssertTarget::Components: return "COMPONENTS";
+        case AssertTarget::Libraries: return "LIBRARIES";
+    }
+    return "UNKNOWN_TARGET";
+}
+
 std::string ColumnRefExpr::full_path() const {
     std::string res;
     for (size_t i = 0; i < path.size(); ++i) {
@@ -92,6 +101,7 @@ void WhoUsesStatement::accept(ASTVisitor& visitor) { visitor.visit(*this); }
 void FindVulnerableStatement::accept(ASTVisitor& visitor) { visitor.visit(*this); }
 void ShowTreeStatement::accept(ASTVisitor& visitor) { visitor.visit(*this); }
 void BlastRadiusStatement::accept(ASTVisitor& visitor) { visitor.visit(*this); }
+void AssertStatement::accept(ASTVisitor& visitor) { visitor.visit(*this); }
 void ProgramNode::accept(ASTVisitor& visitor) { visitor.visit(*this); }
 
 // ASTPrinter implementation
@@ -228,6 +238,37 @@ void ASTPrinter::visit(BlastRadiusStatement& node) {
     indent();
     write_indent();
     oss_ << "VulnerabilityId: \"" << node.vulnerability_id << "\"\n";
+    if (node.bom_path) {
+        write_indent();
+        oss_ << "File: " << *node.bom_path << "\n";
+    }
+    dedent();
+}
+
+void ASTPrinter::visit(AssertStatement& node) {
+    write_indent();
+    oss_ << "AssertStatement:\n";
+    indent();
+    write_indent();
+    oss_ << "Target: " << assert_target_to_string(node.target) << "\n";
+    if (node.severity_level) {
+        write_indent();
+        oss_ << "Severity: " 
+            << (node.severity_op ? binary_op_to_string(*node.severity_op) : "=")
+            << " " << severity_to_string(*node.severity_level) << "\n";
+    } else if (node.score_threshold) {
+        write_indent();
+        oss_ << "Score: "
+            << (node.severity_op ? binary_op_to_string(*node.severity_op) : "=")
+            << " " << *node.score_threshold << "\n";
+    }
+    if (node.where_clause) {
+        write_indent();
+        oss_ << "Where:\n";
+        indent();
+        node.where_clause->accept(*this);
+        dedent();
+    }
     if (node.bom_path) {
         write_indent();
         oss_ << "File: " << *node.bom_path << "\n";

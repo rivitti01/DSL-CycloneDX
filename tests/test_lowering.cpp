@@ -126,3 +126,60 @@ TEST_CASE("Lowering: FIND BLAST RADIUS") {
     REQUIRE(blast != nullptr);
     CHECK(blast->vulnerability_id == "CVE-2021-44228");
 }
+
+TEST_CASE("Lowering: Policy assertions (ASSERT NO ...)") {
+    SUBCASE("ASSERT NO VULNERABILITIES lowers to HashJoin on affects and components") {
+        std::string q = "ASSERT NO VULNERABILITIES SEVERITY >= HIGH;";
+        auto plan = parse_and_lower(q);
+        REQUIRE(plan.root != nullptr);
+        CHECK(plan.is_assertion);
+        CHECK(plan.assertion_title == "ASSERT NO VULNERABILITIES SEVERITY >= HIGH");
+
+        auto* proj = dynamic_cast<IRProject*>(plan.root.get());
+        REQUIRE(proj != nullptr);
+
+        auto* join = dynamic_cast<IRHashJoin*>(proj->child.get());
+        REQUIRE(join != nullptr);
+        CHECK(join->left_key == "affects");
+        CHECK(join->right_key == "bom-ref");
+
+        // Left side: vuln filtered by severity
+        CHECK(join->left->type() == IRNodeType::Filter);
+        // Right side: comp scan
+        CHECK(join->right->type() == IRNodeType::Scan);
+    }
+
+    SUBCASE("ASSERT NO COMPONENTS with WHERE clause") {
+        std::string q = "ASSERT NO COMPONENTS WHERE type = 'framework';";
+        auto plan = parse_and_lower(q);
+        REQUIRE(plan.root != nullptr);
+        CHECK(plan.is_assertion);
+        CHECK(plan.assertion_title == "ASSERT NO COMPONENTS");
+
+        auto* proj = dynamic_cast<IRProject*>(plan.root.get());
+        REQUIRE(proj != nullptr);
+
+        auto* filter = dynamic_cast<IRFilter*>(proj->child.get());
+        REQUIRE(filter != nullptr);
+        CHECK(filter->child->type() == IRNodeType::Scan);
+
+        auto* scan = dynamic_cast<IRScan*>(filter->child.get());
+        REQUIRE(scan != nullptr);
+        CHECK(scan->collection == "components");
+    }
+
+    SUBCASE("ASSERT NO LIBRARIES filters type = 'library'") {
+        std::string q = "ASSERT NO LIBRARIES;";
+        auto plan = parse_and_lower(q);
+        REQUIRE(plan.root != nullptr);
+        CHECK(plan.is_assertion);
+        CHECK(plan.assertion_title == "ASSERT NO LIBRARIES");
+
+        auto* proj = dynamic_cast<IRProject*>(plan.root.get());
+        REQUIRE(proj != nullptr);
+
+        auto* filter = dynamic_cast<IRFilter*>(proj->child.get());
+        REQUIRE(filter != nullptr);
+        CHECK(filter->child->type() == IRNodeType::Scan);
+    }
+}

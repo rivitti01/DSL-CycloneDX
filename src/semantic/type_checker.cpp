@@ -123,6 +123,31 @@ void TypeChecker::visit(BlastRadiusStatement& node) {
     }
 }
 
+void TypeChecker::visit(AssertStatement& node) {
+    if (node.target == AssertTarget::Vulnerabilities) {
+        current_collection_ = "vulnerabilities";
+    } else {
+        current_collection_ = "components";
+        if (node.severity_level.has_value() || node.score_threshold.has_value()) {
+            diag_.error(node.location, "SEVERITY constraint is only valid for 'ASSERT NO VULNERABILITIES'");
+        }
+    }
+
+    if (node.score_threshold.has_value()) {
+        if (*node.score_threshold < 0.0) {
+            diag_.error(node.location, "CVSS score threshold cannot be negative");
+        }
+    }
+
+    if (node.where_clause) {
+        DataType where_type = infer_expression_type(*node.where_clause);
+        if (where_type != DataType::Boolean && where_type != DataType::Unknown) {
+            diag_.error(node.where_clause->location, 
+                        "WHERE clause in ASSERT NO must evaluate to a boolean expression");
+        }
+    }
+}
+
 void TypeChecker::visit(BinaryOpExpr& node) {
     DataType left_type = infer_expression_type(*node.left);
     DataType right_type = infer_expression_type(*node.right);

@@ -8,6 +8,7 @@ class WhoUsesStatement;
 class FindVulnerableStatement;
 class ShowTreeStatement;
 class BlastRadiusStatement;
+class AssertStatement;
 class BinaryOpExpr;
 class UnaryOpExpr;
 class ColumnRefExpr;
@@ -23,6 +24,7 @@ public:
     virtual void visit(FindVulnerableStatement& node) = 0;
     virtual void visit(ShowTreeStatement& node) = 0;
     virtual void visit(BlastRadiusStatement& node) = 0;
+    virtual void visit(AssertStatement& node) = 0;
 
     virtual void visit(BinaryOpExpr& node) = 0;
     virtual void visit(UnaryOpExpr& node) = 0;

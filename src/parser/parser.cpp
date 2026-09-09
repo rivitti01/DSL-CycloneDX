@@ -66,6 +66,7 @@ void Parser::synchronize() {
             case TokenType::KwWho:
             case TokenType::KwFind:
             case TokenType::KwShow:
+            case TokenType::KwAssert:
                 return;
             default:
                 advance();
@@ -436,6 +437,69 @@ std::unique_ptr<BlastRadiusStatement> Parser::parse_blast_radius_statement() {
     return stmt;
 }
 
+std::unique_ptr<AssertStatement> Parser::parse_assert_statement() {
+    SourceLocation loc = previous().location; // KwAssert
+    if (!match(TokenType::KwNo)) {
+        diag_.error(peek().location, "Expected 'NO' after 'ASSERT'");
+        return nullptr;
+    }
+
+    AssertTarget target;
+    if (match(TokenType::KwVulnerabilities)) {
+        target = AssertTarget::Vulnerabilities;
+    } else if (match(TokenType::KwComponents)) {
+        target = AssertTarget::Components;
+    } else if (match(TokenType::KwLibraries)) {
+        target = AssertTarget::Libraries;
+    } else {
+        diag_.error(peek().location, "Expected 'VULNERABILITIES', 'COMPONENTS', or 'LIBRARIES' after 'ASSERT NO'");
+        return nullptr;
+    }
+
+    auto stmt = std::make_unique<AssertStatement>(target, loc);
+
+    // Optional IN "bom.json"
+    if (match(TokenType::KwIn)) {
+        const Token& file_tok = consume(TokenType::StringLiteral, "Expected string literal for file path after 'IN'");
+        stmt->bom_path = file_tok.lexeme;
+    }
+
+    // Optional SEVERITY [op] (LEVEL | number)
+    if (match(TokenType::KwSeverity)) {
+        BinaryOperator op = BinaryOperator::Equal;
+        if (peek().is_comparison_op()) {
+            op = token_to_binary_op(advance().type);
+        }
+
+        const Token& sev_tok = advance();
+        auto sev = severity_from_string(sev_tok.lexeme);
+        if (sev.has_value()) {
+            stmt->severity_op = op;
+            stmt->severity_level = *sev;
+        } else if (sev_tok.type == TokenType::FloatLiteral || sev_tok.type == TokenType::IntegerLiteral) {
+            stmt->severity_op = op;
+            stmt->score_threshold = std::stod(sev_tok.lexeme);
+        } else {
+            diag_.error(sev_tok.location, "Expected severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO, NONE) or numeric score after 'SEVERITY'");
+            return nullptr;
+        }
+    }
+
+    // Optional WHERE clause
+    if (match(TokenType::KwWhere)) {
+        stmt->where_clause = parse_expression(PrecNone);
+    }
+
+    // Optional IN "bom.json" after WHERE / SEVERITY
+    if (!stmt->bom_path && match(TokenType::KwIn)) {
+        const Token& file_tok = consume(TokenType::StringLiteral, "Expected string literal for file path after 'IN'");
+        stmt->bom_path = file_tok.lexeme;
+    }
+
+    match(TokenType::Semicolon);
+    return stmt;
+}
+
 std::unique_ptr<StatementNode> Parser::parse_statement() {
     try {
         if (match(TokenType::KwSelect)) {
@@ -457,8 +521,11 @@ std::unique_ptr<StatementNode> Parser::parse_statement() {
         if (match(TokenType::KwShow)) {
             return parse_show_tree_statement();
         }
+        if (match(TokenType::KwAssert)) {
+            return parse_assert_statement();
+        }
 
-        diag_.error(peek().location, "Expected statement (SELECT, WHO USES, FIND, SHOW)");
+        diag_.error(peek().location, "Expected statement (SELECT, WHO USES, FIND, SHOW, ASSERT)");
         advance();
         return nullptr;
     } catch (const std::exception&) {

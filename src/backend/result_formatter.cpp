@@ -16,8 +16,23 @@ std::string ResultFormatter::format(const QueryResult& result, OutputFormat fmt)
 }
 
 std::string ResultFormatter::to_table(const QueryResult& result) {
+    std::ostringstream oss;
+
+    if (result.is_assertion) {
+        if (result.assertion_passed) {
+            oss << "[POLICY ASSERTION PASSED] " << result.assertion_title << "\n";
+            oss << "Status: COMPLIANT (0 offending records detected in SBOM)\n";
+            oss << "Total: 0 violations [Backend: " << result.execution_backend
+                << ", Time: " << std::fixed << std::setprecision(2) << result.execution_time_ms << " ms]\n";
+            return oss.str();
+        } else {
+            oss << "[POLICY ASSERTION FAILED] " << result.assertion_title << "\n";
+            oss << "Status: NON-COMPLIANT (" << result.rows.size() << " offending record(s) found)\n\n";
+        }
+    }
+
     if (result.columns.empty()) {
-        return "(empty result set, 0 rows)\n";
+        return oss.str() + "(empty result set, 0 rows)\n";
     }
 
     // Calculate maximum width for each column
@@ -30,8 +45,6 @@ std::string ResultFormatter::to_table(const QueryResult& result) {
             col_widths[i] = std::max(col_widths[i], row[i].size());
         }
     }
-
-    std::ostringstream oss;
 
     // Helper to draw horizontal line
     auto draw_separator = [&](char junction, char line) {
@@ -76,6 +89,24 @@ std::string ResultFormatter::to_table(const QueryResult& result) {
 }
 
 std::string ResultFormatter::to_json(const QueryResult& result) {
+    if (result.is_assertion) {
+        nlohmann::json res_obj;
+        res_obj["assertion"] = true;
+        res_obj["title"] = result.assertion_title;
+        res_obj["passed"] = result.assertion_passed;
+        res_obj["violations_count"] = result.rows.size();
+        nlohmann::json violations = nlohmann::json::array();
+        for (const auto& row : result.rows) {
+            nlohmann::json obj;
+            for (size_t i = 0; i < result.columns.size() && i < row.size(); ++i) {
+                obj[result.columns[i]] = row[i];
+            }
+            violations.push_back(obj);
+        }
+        res_obj["violations"] = violations;
+        return res_obj.dump(2) + "\n";
+    }
+
     nlohmann::json j_array = nlohmann::json::array();
     for (const auto& row : result.rows) {
         nlohmann::json obj;

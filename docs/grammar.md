@@ -20,9 +20,10 @@ The lexer recognizes keywords in a **case-insensitive** manner (e.g., `SELECT`, 
   `SELECT`, `FROM`, `WHERE`, `ORDER`, `BY`, `ASC`, `DESC`, `LIMIT`, `IN`
 - **Advanced Security Constructs**:
   `WHO`, `USES`, `TRANSITIVE`, `DIRECT`
-  `FIND`, `VULNERABLE`, `COMPONENTS`, `LIBRARIES`, `SEVERITY`
+  `FIND`, `VULNERABLE`, `COMPONENTS`, `LIBRARIES`, `VULNERABILITIES`, `SEVERITY`
   `SHOW`, `TREE`, `DEPENDENCIES`, `OF`, `DEPTH`
   `BLAST`, `RADIUS`
+  `ASSERT`, `NO`
 - **Logical Operators and Predicates**:
   `AND`, `OR`, `NOT`, `CONTAINS`, `MATCHES`, `LIKE`
 - **CVSS Severity Levels**:
@@ -68,6 +69,7 @@ Statement       ::= SelectStmt
                   | FindVulnerableStmt
                   | ShowTreeStmt
                   | BlastRadiusStmt
+                  | AssertStmt
 ```
 
 ---
@@ -124,6 +126,18 @@ ShowTreeStmt    ::= "SHOW" ( "TREE" | "DEPENDENCIES" )
 Computes the blast radius of a vulnerability along the transitive dependency chain up to the root application.
 ```ebnf
 BlastRadiusStmt ::= "FIND" "BLAST" "RADIUS" "OF" TargetRef [ "IN" StringLiteral ]
+```
+
+#### `ASSERT NO` (Policy Enforcement & CI/CD Gatekeeping)
+Enforces security and architectural compliance policies across vulnerabilities, components, or libraries. If any offending records are detected, execution terminates with exit code `1` (or non-zero) and reports violating records; otherwise yields exit code `0`.
+```ebnf
+AssertStmt      ::= "ASSERT" "NO" AssertTarget
+                    [ "SEVERITY" [ CompOp ] ( SeverityLevel | NumberLiteral ) ]
+                    [ "WHERE" Expression ]
+                    [ "IN" StringLiteral ]
+
+AssertTarget    ::= "VULNERABILITIES" | "COMPONENTS" | "LIBRARIES"
+NumberLiteral   ::= IntegerLiteral | FloatLiteral
 ```
 
 ---

@@ -669,6 +669,12 @@ QueryResult NativeEngine::execute(const IRPlan& plan, DiagnosticEngine& diag) {
         }
     }
 
+    if (plan.is_assertion) {
+        res.is_assertion = true;
+        res.assertion_title = plan.assertion_title;
+        res.assertion_passed = res.rows.empty();
+    }
+
     auto end_time = std::chrono::high_resolution_clock::now();
     res.execution_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
     return res;

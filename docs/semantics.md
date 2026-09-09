@@ -84,3 +84,13 @@ The DSL implements a static yet flexible type system to validate expressions and
 
 ### 4.3 Target for `WHO USES` and `FIND BLAST RADIUS`
 - The target component identifier or CVE identifier must not be empty strings.
+
+### 4.4 `ASSERT NO` Policy Statement Constraints
+- **Target Resolution**: Target must resolve to one of `VULNERABILITIES`, `COMPONENTS`, or `LIBRARIES`.
+- **SEVERITY Clause Scoping**: The `SEVERITY` clause (severity level or CVSS score) is **only permitted** when target is `VULNERABILITIES`. Applying `SEVERITY` to `COMPONENTS` or `LIBRARIES` triggers a semantic type error:
+  ```
+  error: SEVERITY constraint is only valid for 'ASSERT NO VULNERABILITIES'
+  ```
+- **CVSS Score Bounds**: If specified as a numeric threshold, the CVSS score must be non-negative ($\ge 0.0$).
+- **WHERE Clause**: Must strictly evaluate to a `Boolean` expression.
+

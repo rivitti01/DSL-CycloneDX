@@ -1,5 +1,6 @@
 #include "sbom_dsl/lowering/query_lowerer.hpp"
 #include <stdexcept>
+#include <sstream>
 
 namespace sbom_dsl {
 
@@ -45,6 +46,9 @@ IRPlan QueryLowerer::lower(StatementNode& statement) {
     }
     if (auto* blast = dynamic_cast<BlastRadiusStatement*>(&statement)) {
         return lower_blast_radius(*blast);
+    }
+    if (auto* asrt = dynamic_cast<AssertStatement*>(&statement)) {
+        return lower_assert(*asrt);
     }
     throw std::runtime_error("Unknown statement type in QueryLowerer");
 }
@@ -184,6 +188,85 @@ IRPlan QueryLowerer::lower_blast_radius(BlastRadiusStatement& stmt) {
     auto blast = std::make_unique<IRBlastRadius>(std::move(vuln_scan), stmt.vulnerability_id);
 
     plan.root = std::move(blast);
+    return plan;
+}
+
+IRPlan QueryLowerer::lower_assert(AssertStatement& stmt) {
+    IRPlan plan;
+    plan.bom_path = stmt.bom_path;
+    plan.is_assertion = true;
+
+    if (stmt.target == AssertTarget::Vulnerabilities) {
+        std::string title = "ASSERT NO VULNERABILITIES";
+        if (stmt.severity_level) {
+            title += " SEVERITY " +
+                std::string(stmt.severity_op ? binary_op_to_string(*stmt.severity_op) : "=") + " " +
+                std::string(severity_to_string(*stmt.severity_level));
+        } else if (stmt.score_threshold) {
+            std::ostringstream ss;
+            ss << *stmt.score_threshold;
+            title += " SEVERITY " +
+                std::string(stmt.severity_op ? binary_op_to_string(*stmt.severity_op) : "=") + " " +
+                ss.str();
+        }
+        plan.assertion_title = title;
+
+        // 1. Scan vulnerabilities
+        std::unique_ptr<IRNode> vuln_pipeline = std::make_unique<IRScan>("vulnerabilities", stmt.bom_path);
+
+        if (stmt.severity_level) {
+            auto col = std::make_unique<ColumnRefExpr>(std::vector<std::string>{"ratings", "severity"}, stmt.location);
+            auto lit = std::make_unique<LiteralExpr>(*stmt.severity_level, stmt.location);
+            BinaryOperator op = stmt.severity_op.value_or(BinaryOperator::Equal);
+            auto sev_pred = std::make_unique<BinaryOpExpr>(op, std::move(col), std::move(lit), stmt.location);
+            vuln_pipeline = std::make_unique<IRFilter>(std::move(vuln_pipeline), std::move(sev_pred));
+        } else if (stmt.score_threshold) {
+            auto col = std::make_unique<ColumnRefExpr>(std::vector<std::string>{"ratings", "score"}, stmt.location);
+            auto lit = std::make_unique<LiteralExpr>(*stmt.score_threshold, stmt.location);
+            BinaryOperator op = stmt.severity_op.value_or(BinaryOperator::Equal);
+            auto score_pred = std::make_unique<BinaryOpExpr>(op, std::move(col), std::move(lit), stmt.location);
+            vuln_pipeline = std::make_unique<IRFilter>(std::move(vuln_pipeline), std::move(score_pred));
+        }
+
+        if (stmt.where_clause) {
+            vuln_pipeline = std::make_unique<IRFilter>(std::move(vuln_pipeline), clone_expression(stmt.where_clause.get()));
+        }
+
+        // 2. Scan components
+        std::unique_ptr<IRNode> comp_pipeline = std::make_unique<IRScan>("components", stmt.bom_path);
+
+        // 3. Hash Join on affects == bom-ref
+        auto join = std::make_unique<IRHashJoin>(
+            std::move(vuln_pipeline),
+            std::move(comp_pipeline),
+            "affects",
+            "bom-ref"
+        );
+
+        // 4. Project
+        std::vector<std::string> proj = {"name", "version", "type", "vuln_id", "severity", "score", "description"};
+        plan.root = std::make_unique<IRProject>(std::move(join), proj);
+    } else {
+        bool is_lib = (stmt.target == AssertTarget::Libraries);
+        plan.assertion_title = is_lib ? "ASSERT NO LIBRARIES" : "ASSERT NO COMPONENTS";
+
+        std::unique_ptr<IRNode> root = std::make_unique<IRScan>("components", stmt.bom_path);
+
+        if (is_lib) {
+            auto col = std::make_unique<ColumnRefExpr>(std::vector<std::string>{"type"}, stmt.location);
+            auto lit = std::make_unique<LiteralExpr>(std::string("library"), stmt.location);
+            auto type_pred = std::make_unique<BinaryOpExpr>(BinaryOperator::Equal, std::move(col), std::move(lit), stmt.location);
+            root = std::make_unique<IRFilter>(std::move(root), std::move(type_pred));
+        }
+
+        if (stmt.where_clause) {
+            root = std::make_unique<IRFilter>(std::move(root), clone_expression(stmt.where_clause.get()));
+        }
+
+        std::vector<std::string> proj = {"name", "version", "type", "purl"};
+        plan.root = std::make_unique<IRProject>(std::move(root), proj);
+    }
+
     return plan;
 }
 
