@@ -51,6 +51,7 @@ private:
     std::unordered_map<std::string, std::vector<std::string>> reverse_graph_;
     std::vector<nlohmann::json> vulnerabilities_;
     std::unordered_multimap<std::string, nlohmann::json> affects_to_vulns_;
+    GraphData current_graph_;
 };
 
 } // namespace sbom_dsl

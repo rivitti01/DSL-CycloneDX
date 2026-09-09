@@ -145,6 +145,31 @@ Dependency Tree:
 │   └── body-parser@1.19.0
 ```
 
+### Visual Graph Export (`--format mermaid`)
+```bash
+./build/sbom-dsl examples/show_tree.dsl --format mermaid
+```
+
+```mermaid
+graph TD
+    %% Nodes
+    my_web_app["my-web-app@2.1.0 (Root App)"]
+    express["express@4.17.1"]
+    log4j_core["log4j-core@2.14.1 [CVE-2021-44228: critical]"]
+    body_parser["body-parser@1.19.0"]
+
+    %% Edges
+    my_web_app --> express
+    my_web_app --> log4j_core
+    express --> body_parser
+
+    %% Security Impact Styles
+    style my_web_app fill:#2e78d2,stroke:#1a539e,stroke-width:2px,color:#ffffff
+    style express fill:#e1f5fe,stroke:#81d4fa,stroke-width:1px,color:#0d47a1
+    style log4j_core fill:#ff4d4d,stroke:#cc0000,stroke-width:2px,color:#ffffff
+    style body_parser fill:#e1f5fe,stroke:#81d4fa,stroke-width:1px,color:#0d47a1
+```
+
 ---
 
 ## Example 5: Blast Radius Analysis (`FIND BLAST RADIUS`)
@@ -154,7 +179,7 @@ Dependency Tree:
 FIND BLAST RADIUS OF "CVE-2021-44228" IN "tests/fixtures/sample_cyclonedx.json";
 ```
 
-### Execution Command
+### Execution Command (Table Format)
 ```bash
 ./build/sbom-dsl examples/blast_radius.dsl
 ```
@@ -174,6 +199,31 @@ FIND BLAST RADIUS OF "CVE-2021-44228" IN "tests/fixtures/sample_cyclonedx.json";
 | Root Application Exposed?        | YES (CRITICAL IMPACT) |
 +----------------------------------+-----------------------+
 Total: 8 row(s) [Backend: Native CycloneDX Engine, Time: 0.12 ms]
+```
+
+### Graphical Export with Mermaid (`--format mermaid`)
+```bash
+./build/sbom-dsl -c "FIND BLAST RADIUS OF 'CVE-2022-29244';" -b tests/fixtures/sample_cyclonedx.json --format mermaid
+```
+
+```mermaid
+graph TD
+    %% Nodes
+    my_web_app["my-web-app@2.1.0 [Root Application]"]
+    express["express@4.17.1"]
+    body_parser["body-parser@1.19.0"]
+    qs["qs@6.7.0 [CVE-2022-29244 [high]]"]
+
+    %% Edges
+    my_web_app --> express
+    express --> body_parser
+    body_parser --> qs
+
+    %% Security Impact Styles
+    style my_web_app fill:#2e78d2,stroke:#1a539e,stroke-width:2px,color:#ffffff
+    style express fill:#ffa500,stroke:#cc8400,stroke-width:2px,color:#ffffff
+    style body_parser fill:#ffa500,stroke:#cc8400,stroke-width:2px,color:#ffffff
+    style qs fill:#ff4d4d,stroke:#cc0000,stroke-width:2px,color:#ffffff
 ```
 
 ---

@@ -28,6 +28,8 @@ CLIOptions CLIOptions::parse(int argc, char* argv[]) {
             std::string fmt = argv[++i];
             if (fmt == "json") opts.output_format = OutputFormat::Json;
             else if (fmt == "tree") opts.output_format = OutputFormat::Tree;
+            else if (fmt == "dot") opts.output_format = OutputFormat::Dot;
+            else if (fmt == "mermaid") opts.output_format = OutputFormat::Mermaid;
             else opts.output_format = OutputFormat::Table;
         } else if (!arg.empty() && arg[0] != '-') {
             opts.query_file = arg;
@@ -45,7 +47,7 @@ void CLIOptions::print_help(const char* prog_name) {
               << "  -c <query>              Execute query inline\n"
               << "  -b, --bom <file>        Specify default CycloneDX SBOM JSON file\n"
               << "  -e, --explain           Explain query execution (tokens, AST, semantic, IR, codegen)\n"
-              << "  -f, --format <format>   Output format: table (default), json, tree\n"
+              << "  -f, --format <format>   Output format: table (default), json, tree, dot, mermaid\n"
               << "  -i, --interactive       Start interactive query shell (REPL)\n"
               << "      --sbom-utility      Attempt offloading to sbom-utility CLI if available\n"
               << "  -h, --help              Show this help message\n"

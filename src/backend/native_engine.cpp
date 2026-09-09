@@ -473,10 +473,44 @@ std::vector<nlohmann::json> NativeEngine::eval_graph_traverse(const IRGraphTrave
 
     const auto& graph = (traverse.direction == GraphDirection::Reverse) ? reverse_graph_ : forward_graph_;
 
+    current_graph_ = GraphData{};
+    current_graph_.title = (traverse.direction == GraphDirection::Forward) ? "DependencyTree" : "WhoUses";
+
+    auto get_comp_name = [&](const std::string& ref) -> std::string {
+        auto cit = components_by_ref_.find(ref);
+        if (cit != components_by_ref_.end()) return cit->second.value("name", ref);
+        return ref;
+    };
+    auto get_comp_ver = [&](const std::string& ref) -> std::string {
+        auto cit = components_by_ref_.find(ref);
+        if (cit != components_by_ref_.end()) return cit->second.value("version", "");
+        return "";
+    };
+    auto get_comp_vuln = [&](const std::string& ref) -> std::pair<std::string, std::string> {
+        auto vrange = affects_to_vulns_.equal_range(ref);
+        if (vrange.first != vrange.second) {
+            const auto& v = vrange.first->second;
+            std::string vid = v.value("id", "");
+            std::string vsev = "";
+            if (v.contains("ratings") && v["ratings"].is_array() && !v["ratings"].empty()) {
+                vsev = v["ratings"][0].value("severity", "");
+            }
+            std::string details = vid + (!vsev.empty() ? (": " + vsev) : "");
+            return {"vulnerable", details};
+        }
+        return {"standard", ""};
+    };
+
     std::queue<std::pair<std::string, size_t>> queue;
     for (const auto& r : start_refs) {
         queue.push({r, 0});
         visited.insert(r);
+
+        std::string r_name = get_comp_name(r);
+        std::string r_ver = get_comp_ver(r);
+        auto [vuln_role, vuln_details] = get_comp_vuln(r);
+        std::string role = (traverse.direction == GraphDirection::Forward || r == root_ref_) ? "root" : vuln_role;
+        current_graph_.nodes.push_back({r_name, r_name, r_ver, role, vuln_details, 0});
     }
 
     while (!queue.empty()) {
@@ -501,9 +535,22 @@ std::vector<nlohmann::json> NativeEngine::eval_graph_traverse(const IRGraphTrave
         auto it = graph.find(curr_ref);
         if (it != graph.end()) {
             for (const auto& neighbor : it->second) {
+                std::string curr_name = get_comp_name(curr_ref);
+                std::string neighbor_name = get_comp_name(neighbor);
+
                 if (visited.find(neighbor) == visited.end()) {
                     visited.insert(neighbor);
                     queue.push({neighbor, depth + 1});
+
+                    std::string n_ver = get_comp_ver(neighbor);
+                    auto [vuln_role, vuln_details] = get_comp_vuln(neighbor);
+                    current_graph_.nodes.push_back({neighbor_name, neighbor_name, n_ver, vuln_role, vuln_details, depth + 1});
+                }
+
+                if (traverse.direction == GraphDirection::Forward) {
+                    current_graph_.edges.push_back({curr_name, neighbor_name, ""});
+                } else {
+                    current_graph_.edges.push_back({neighbor_name, curr_name, ""});
                 }
             }
         }
@@ -609,6 +656,53 @@ QueryResult NativeEngine::eval_blast_radius(const IRBlastRadius& blast, Diagnost
     };
 
     res.blast_radius = metrics;
+
+    // Construct visual graph for Blast Radius
+    GraphData blast_graph;
+    blast_graph.title = "BlastRadius_" + metrics.vulnerability_id;
+
+    auto get_comp_name = [&](const std::string& ref) -> std::string {
+        auto cit = components_by_ref_.find(ref);
+        if (cit != components_by_ref_.end()) return cit->second.value("name", ref);
+        return ref;
+    };
+    auto get_comp_ver = [&](const std::string& ref) -> std::string {
+        auto cit = components_by_ref_.find(ref);
+        if (cit != components_by_ref_.end()) return cit->second.value("version", "");
+        return "";
+    };
+
+    for (const auto& ref : all_impacted) {
+        std::string name = get_comp_name(ref);
+        std::string ver = get_comp_ver(ref);
+        std::string role = "transitive";
+        std::string details = "";
+
+        if (directly_affected.count(ref)) {
+            role = "vulnerable";
+            details = metrics.vulnerability_id + " [" + metrics.severity + "]";
+        } else if (ref == root_ref_) {
+            role = "root";
+            details = "Root Application";
+        }
+
+        blast_graph.nodes.push_back({name, name, ver, role, details, 0});
+    }
+
+    for (const auto& child_ref : all_impacted) {
+        auto it = reverse_graph_.find(child_ref);
+        if (it != reverse_graph_.end()) {
+            for (const auto& parent_ref : it->second) {
+                if (all_impacted.count(parent_ref)) {
+                    std::string p_name = get_comp_name(parent_ref);
+                    std::string c_name = get_comp_name(child_ref);
+                    blast_graph.edges.push_back({p_name, c_name, ""});
+                }
+            }
+        }
+    }
+
+    res.graph = blast_graph;
     return res;
 }
 
@@ -678,6 +772,7 @@ QueryResult NativeEngine::execute(const IRPlan& plan, DiagnosticEngine& diag) {
     }
 
     QueryResult res;
+    current_graph_ = GraphData{};
     if (!plan.root) return res;
 
     if (plan.root->type() == IRNodeType::BlastRadius) {
@@ -690,6 +785,10 @@ QueryResult NativeEngine::execute(const IRPlan& plan, DiagnosticEngine& diag) {
         for (const auto& item : items) {
             res.rows.push_back({item.dump()});
         }
+    }
+
+    if (!res.graph.has_value() && !current_graph_.nodes.empty()) {
+        res.graph = std::move(current_graph_);
     }
 
     if (plan.is_assertion) {

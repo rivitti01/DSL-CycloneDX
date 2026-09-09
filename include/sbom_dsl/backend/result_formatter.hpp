@@ -8,7 +8,9 @@ namespace sbom_dsl {
 enum class OutputFormat {
     Table,
     Json,
-    Tree
+    Tree,
+    Dot,
+    Mermaid
 };
 
 class ResultFormatter {
@@ -17,6 +19,8 @@ public:
     static std::string to_table(const QueryResult& result);
     static std::string to_json(const QueryResult& result);
     static std::string to_tree(const QueryResult& result);
+    static std::string to_dot(const QueryResult& result);
+    static std::string to_mermaid(const QueryResult& result);
 };
 
 } // namespace sbom_dsl

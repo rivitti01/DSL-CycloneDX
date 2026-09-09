@@ -239,17 +239,109 @@ TEST_CASE("Backend: Pattern Matching (LIKE, CONTAINS, MATCHES)") {
     }
 }
 
-TEST_CASE("Backend: Result Formatter") {
+TEST_CASE("Backend: Result Formatter (Table, JSON, Tree, DOT, Mermaid)") {
     QueryResult res;
     res.columns = {"name", "version"};
     res.rows = {{"express", "4.17.1"}, {"lodash", "4.17.21"}};
 
-    std::string table = ResultFormatter::to_table(res);
-    CHECK(table.find("express") != std::string::npos);
-    CHECK(table.find("4.17.1") != std::string::npos);
+    SUBCASE("Table output format") {
+        std::string table = ResultFormatter::to_table(res);
+        CHECK(table.find("express") != std::string::npos);
+        CHECK(table.find("4.17.1") != std::string::npos);
+    }
 
-    std::string json = ResultFormatter::to_json(res);
-    CHECK(json.find("\"name\": \"express\"") != std::string::npos);
+    SUBCASE("JSON output format") {
+        std::string json = ResultFormatter::to_json(res);
+        CHECK(json.find("\"name\": \"express\"") != std::string::npos);
+    }
+
+    SUBCASE("Graphviz DOT export for SHOW TREE") {
+        auto res_tree = run_query("SHOW TREE OF 'my-web-app' DEPTH 2;");
+        std::string dot = ResultFormatter::to_dot(res_tree);
+
+        // Verify Graphviz syntax and header
+        CHECK(dot.find("digraph") != std::string::npos);
+        CHECK(dot.find("rankdir=TB;") != std::string::npos);
+
+        // Verify nodes
+        CHECK(dot.find("\"my-web-app\"") != std::string::npos);
+        CHECK(dot.find("\"express\"") != std::string::npos);
+        CHECK(dot.find("\"log4j-core\"") != std::string::npos);
+        CHECK(dot.find("\"body-parser\"") != std::string::npos);
+
+        // Verify edges
+        CHECK(dot.find("\"my-web-app\" -> \"express\"") != std::string::npos);
+        CHECK(dot.find("\"my-web-app\" -> \"log4j-core\"") != std::string::npos);
+        CHECK(dot.find("\"express\" -> \"body-parser\"") != std::string::npos);
+
+        // Verify semantic coloration
+        CHECK(dot.find("#2e78d2") != std::string::npos); // root application
+        CHECK(dot.find("#ff4d4d") != std::string::npos); // vulnerable node (log4j-core)
+        CHECK(dot.find("#e1f5fe") != std::string::npos); // standard dependencies
+    }
+
+    SUBCASE("Mermaid export for FIND BLAST RADIUS") {
+        auto res_blast = run_query("FIND BLAST RADIUS OF 'CVE-2022-29244';");
+        std::string mermaid = ResultFormatter::to_mermaid(res_blast);
+
+        // Verify Mermaid syntax and header
+        CHECK(mermaid.find("graph TD") != std::string::npos);
+
+        // Verify nodes
+        CHECK(mermaid.find("qs") != std::string::npos);
+        CHECK(mermaid.find("body_parser") != std::string::npos);
+        CHECK(mermaid.find("express") != std::string::npos);
+        CHECK(mermaid.find("my_web_app") != std::string::npos);
+
+        // Verify edges
+        CHECK(mermaid.find("my_web_app --> express") != std::string::npos);
+        CHECK(mermaid.find("express --> body_parser") != std::string::npos);
+        CHECK(mermaid.find("body_parser --> qs") != std::string::npos);
+
+        // Verify semantic security coloration
+        CHECK(mermaid.find("style qs fill:#ff4d4d") != std::string::npos); // vulnerable target
+        CHECK(mermaid.find("style body_parser fill:#ffa500") != std::string::npos); // transitive impact
+        CHECK(mermaid.find("style express fill:#ffa500") != std::string::npos); // transitive impact
+        CHECK(mermaid.find("style my_web_app fill:#2e78d2") != std::string::npos); // root application
+    }
+
+    SUBCASE("Cross-format: SHOW TREE with Mermaid and BLAST RADIUS with DOT") {
+        auto res_tree = run_query("SHOW TREE OF 'my-web-app' DEPTH 2;");
+        std::string tree_mermaid = ResultFormatter::to_mermaid(res_tree);
+        CHECK(tree_mermaid.find("graph TD") != std::string::npos);
+        CHECK(tree_mermaid.find("my_web_app --> express") != std::string::npos);
+        CHECK(tree_mermaid.find("style log4j_core fill:#ff4d4d") != std::string::npos);
+
+        auto res_blast = run_query("FIND BLAST RADIUS OF 'CVE-2022-29244';");
+        std::string blast_dot = ResultFormatter::to_dot(res_blast);
+        CHECK(blast_dot.find("digraph") != std::string::npos);
+        CHECK(blast_dot.find("\"my-web-app\" -> \"express\"") != std::string::npos);
+        CHECK(blast_dot.find("\"qs\"") != std::string::npos);
+        CHECK(blast_dot.find("#ff4d4d") != std::string::npos);
+        CHECK(blast_dot.find("#ffa500") != std::string::npos);
+    }
+
+    SUBCASE("Direct Formatter with custom GraphData and empty results") {
+        QueryResult custom_res;
+        GraphData gd;
+        gd.title = "CustomGraph";
+        gd.nodes.push_back({"app", "my-app", "1.0.0", "root", "", 0});
+        gd.nodes.push_back({"lib", "vuln-lib", "0.9.1", "vulnerable", "CVE-2020-0001", 1});
+        gd.edges.push_back({"app", "lib", "depends"});
+        custom_res.graph = gd;
+
+        std::string dot = ResultFormatter::format(custom_res, OutputFormat::Dot);
+        CHECK(dot.find("digraph CustomGraph") != std::string::npos);
+        CHECK(dot.find("\"app\" -> \"lib\"") != std::string::npos);
+
+        std::string mermaid = ResultFormatter::format(custom_res, OutputFormat::Mermaid);
+        CHECK(mermaid.find("graph TD") != std::string::npos);
+        CHECK(mermaid.find("my_app -->|depends| vuln_lib") != std::string::npos);
+
+        QueryResult empty_res;
+        CHECK(ResultFormatter::to_dot(empty_res).find("digraph") != std::string::npos);
+        CHECK(ResultFormatter::to_mermaid(empty_res).find("graph TD") != std::string::npos);
+    }
 }
 
 TEST_CASE("Backend: Functional Equivalence with IROptimizer") {

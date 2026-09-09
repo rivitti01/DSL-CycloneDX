@@ -171,7 +171,7 @@ static void run_repl(const CLIOptions& base_opts, NativeEngine& engine) {
     CLIOptions opts = base_opts;
     std::cout << "CycloneDX Query DSL Interactive Shell (REPL)\n"
               << "Type your queries followed by ';' or 'exit'/'quit' to exit.\n"
-              << "Commands: ':explain [on|off]', ':bom <file>', ':format [table|json|tree]'\n\n";
+              << "Commands: ':explain [on|off]', ':bom <file>', ':format [table|json|tree|dot|mermaid]'\n\n";
 
     std::string line;
     std::string accumulator;
@@ -216,6 +216,8 @@ static void run_repl(const CLIOptions& base_opts, NativeEngine& engine) {
         if (trimmed.rfind(":format", 0) == 0) {
             if (trimmed.find("json") != std::string::npos) opts.output_format = OutputFormat::Json;
             else if (trimmed.find("tree") != std::string::npos) opts.output_format = OutputFormat::Tree;
+            else if (trimmed.find("dot") != std::string::npos) opts.output_format = OutputFormat::Dot;
+            else if (trimmed.find("mermaid") != std::string::npos) opts.output_format = OutputFormat::Mermaid;
             else opts.output_format = OutputFormat::Table;
             std::cout << "Output format set.\n";
             continue;

@@ -6,6 +6,9 @@
 #include "sbom_dsl/lowering/query_lowerer.hpp"
 #include "sbom_dsl/backend/native_engine.hpp"
 #include <cstdlib>
+#include <fstream>
+#include <array>
+#include <memory>
 
 using namespace sbom_dsl;
 
@@ -157,5 +160,40 @@ TEST_CASE("End-to-End: Full Compiler Pipeline") {
         int ret_fail = std::system(cmd_fail.c_str());
         int exit_code = (ret_fail >= 0 && ret_fail <= 255) ? ret_fail : (ret_fail >> 8);
         CHECK(exit_code == 1);
+    }
+
+    SUBCASE("CLI graphical export (--format dot and --format mermaid)") {
+        std::string exe = "./sbom-dsl";
+        if (std::ifstream("./build/sbom-dsl").good()) {
+            exe = "./build/sbom-dsl";
+        }
+
+        auto run_cmd = [](const std::string& cmd) -> std::string {
+            std::array<char, 256> buffer;
+            std::string result;
+            std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+            if (!pipe) return "";
+            while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+                result += buffer.data();
+            }
+            return result;
+        };
+
+        // Test --format dot on SHOW TREE
+        std::string cmd_dot = exe + " -b \"" + FIXTURE + "\" -c \"SHOW TREE OF 'my-web-app' DEPTH 2;\" --format dot";
+        std::string out_dot = run_cmd(cmd_dot);
+        CHECK(out_dot.find("digraph DependencyTree") != std::string::npos);
+        CHECK(out_dot.find("\"my-web-app\" -> \"express\"") != std::string::npos);
+        CHECK(out_dot.find("\"my-web-app\" -> \"log4j-core\"") != std::string::npos);
+        CHECK(out_dot.find("#ff4d4d") != std::string::npos);
+
+        // Test --format mermaid on FIND BLAST RADIUS
+        std::string cmd_mermaid = exe + " -b \"" + FIXTURE + "\" -c \"FIND BLAST RADIUS OF 'CVE-2022-29244';\" --format mermaid";
+        std::string out_mermaid = run_cmd(cmd_mermaid);
+        CHECK(out_mermaid.find("graph TD") != std::string::npos);
+        CHECK(out_mermaid.find("my_web_app --> express") != std::string::npos);
+        CHECK(out_mermaid.find("body_parser --> qs") != std::string::npos);
+        CHECK(out_mermaid.find("style qs fill:#ff4d4d") != std::string::npos);
+        CHECK(out_mermaid.find("style body_parser fill:#ffa500") != std::string::npos);
     }
 }

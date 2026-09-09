@@ -200,6 +200,8 @@ ASSERT NO LIBRARIES WHERE name = 'log4j-core' AND version LIKE '2.14%';
 1. **ASCII Table (`table`)**: Default format with aligned columns, row count statistics, and execution time.
 2. **JSON (`json`)**: Standard JSON output suitable for CI/CD pipelines or scripting integration.
 3. **Tree (`tree`)**: Hierarchical tree visualization using box-drawing characters (`├──`, `└──`), ideal for `SHOW TREE`.
+4. **Graphviz DOT (`dot`)**: Directed graph format (`digraph { ... }`) for rendering diagrams via Graphviz tools (`dot -Tpng`, `dot -Tsvg`). Includes semantic security coloring (root in blue, target vulnerabilities in red, transitive impacts in orange).
+5. **Mermaid (`mermaid`)**: Diagram specification (`graph TD`) for instant rendering in Markdown files, GitHub, and documentation viewers. Includes automated styling and semantic vulnerability impact highlights.
 
 ### 4.2 Explain Mode (`--explain`)
 Adding `--explain` to the command line (or `:explain on` in the REPL) outputs a detailed breakdown of each compilation phase:
