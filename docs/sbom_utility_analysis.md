@@ -1,42 +1,42 @@
-# Fase 0: Analisi di CycloneDX e `sbom-utility`
+# Phase 0: CycloneDX and `sbom-utility` Analysis
 
-Questo documento riporta i risultati dell'indagine preliminare condotta sulle specifiche CycloneDX e sul tool ufficiale [`sbom-utility`](https://github.com/CycloneDX/sbom-utility), in preparazione alla progettazione del Domain Specific Language (DSL) per il corso di **Formal Languages and Compilers** (Politecnico di Milano).
-
----
-
-## 1. Cos'è e cosa fa `sbom-utility`
-
-`sbom-utility` è un'applicazione da riga di comando open source sviluppata all'interno del progetto OWASP CycloneDX (scritta in Go). Il suo obiettivo è validare, analizzare, interrogare e modificare Software Bill of Materials (SBOM) in formato CycloneDX e SPDX.
-
-### Comandi principali offerti dal tool:
-1. **`validate`**: Valida SBOM (CycloneDX o SPDX) a fronte dei rispettivi JSON schema ufficiali e di eventuali custom schema o regole aziendali.
-2. **`query`**: Esegue interrogazioni "SQL-like" sul modello a oggetti JSON del documento SBOM tramite i flag `--from`, `--select`, `--where`.
-3. **`component list`**: Estrae l'elenco dei componenti dichiarati nel documento (`metadata.component` e array `components`), con supporto per formati di output tabulari (`txt`, `csv`, `md`).
-4. **`vulnerability list`**: Elenca le vulnerabilità dichiarate (array `vulnerabilities` per CycloneDX VEX/VDR) con severità CVSS, CWE, stato di analisi ed entità affette.
-5. **`license list` / `license policy`**: Estrae le licenze dichiarate e ne valuta la conformità rispetto a policy configurate in un file `license.json`.
-6. **`resource list`**: Elenca componenti e servizi.
-7. **`trim`, `patch`, `diff`**: Funzionalità di modifica del documento (riduzione di campi, applicazione di RFC 6902 JSON patch, calcolo delta tra SBOM).
-
-### Come funziona il comando `query` in `sbom-utility`:
-- `--from <dot.path>`: Dereferenzia un percorso puntato nel documento JSON (ad esempio `metadata.component`, `components`, `vulnerabilities`, `dependencies`).
-- `--select <k1,k2,...>`: Proietta una lista di chiavi di primo livello dell'oggetto o degli elementi dell'array (oppure `*` per tutte).
-- `--where <k1=regex,k2=regex>`: Filtra gli elementi di un array imponendo corrispondenze regex (con operazione di `AND` implicito) sulle proprietà di primo livello.
-- **Output**: Il comando `query` supporta esclusivamente output in formato JSON.
+This document reports the findings of the preliminary investigation conducted on the CycloneDX specifications and the official [`sbom-utility`](https://github.com/CycloneDX/sbom-utility) tool, in preparation for designing the Domain Specific Language (DSL) for the **Formal Languages and Compilers** course (Politecnico di Milano).
 
 ---
 
-## 2. Come sono rappresentate le informazioni in CycloneDX
+## 1. What `sbom-utility` is and what it does
 
-Le SBOM CycloneDX (dalla v1.2 alla v1.6+) strutturano i dati software attraverso sezioni chiave:
+`sbom-utility` is an open-source command-line application developed within the OWASP CycloneDX project (written in Go). Its objective is to validate, analyze, query, and modify Software Bill of Materials (SBOM) documents in CycloneDX and SPDX formats.
+
+### Main commands provided by the tool:
+1. **`validate`**: Validates SBOMs (CycloneDX or SPDX) against their respective official JSON schemas and any custom enterprise schemas or rules.
+2. **`query`**: Executes "SQL-like" queries on the SBOM document's JSON object model using `--from`, `--select`, and `--where` flags.
+3. **`component list`**: Extracts the list of declared components (`metadata.component` and the `components` array), supporting tabular output formats (`txt`, `csv`, `md`).
+4. **`vulnerability list`**: Lists declared vulnerabilities (the `vulnerabilities` array in CycloneDX VEX/VDR) with CVSS severity, CWE, analysis status, and affected entities.
+5. **`license list` / `license policy`**: Extracts declared licenses and evaluates compliance against policies configured in a `license.json` file.
+6. **`resource list`**: Lists components and services.
+7. **`trim`, `patch`, `diff`**: Document modification features (field reduction, RFC 6902 JSON patch application, SBOM delta calculation).
+
+### How the `query` command works in `sbom-utility`:
+- `--from <dot.path>`: Dereferences a dotted path in the JSON document (e.g., `metadata.component`, `components`, `vulnerabilities`, `dependencies`).
+- `--select <k1,k2,...>`: Projects a list of top-level keys from the object or array elements (or `*` for all).
+- `--where <k1=regex,k2=regex>`: Filters array elements by enforcing regex matches (with an implicit `AND` operation) on top-level properties.
+- **Output**: The `query` command exclusively supports JSON output format.
+
+---
+
+## 2. How information is represented in CycloneDX
+
+CycloneDX SBOMs (from v1.2 to v1.6+) structure software data through key sections:
 
 1. **Root Component (`metadata.component`)**:
-   Rappresenta l'applicazione principale (nome, versione, tipo `application`, `bom-ref`).
-2. **Componenti (`components[]`)**:
-   Inventario delle librerie, framework, moduli, container o file.
-   - Ogni componente possiede un identificativo univoco: `bom-ref` (spesso formato Package URL - `purl`, es. `pkg:npm/express@4.17.1`).
-   - Contiene attributi: `name`, `version`, `type` (`library`, `framework`, `application`), `description`, `licenses[]`, `hashes[]`, `supplier`, `purl`.
-3. **Grafo delle Dipendenze (`dependencies[]`)**:
-   Rappresenta le relazioni di dipendenza diretta tra componenti:
+   Represents the main application (name, version, type `application`, `bom-ref`).
+2. **Components (`components[]`)**:
+   Inventory of libraries, frameworks, modules, containers, or files.
+   - Each component has a unique identifier: `bom-ref` (often in Package URL format - `purl`, e.g., `pkg:npm/express@4.17.1`).
+   - Contains attributes: `name`, `version`, `type` (`library`, `framework`, `application`), `description`, `licenses[]`, `hashes[]`, `supplier`, `purl`.
+3. **Dependency Graph (`dependencies[]`)**:
+   Represents direct dependency relationships between components:
    ```json
    "dependencies": [
      {
@@ -54,66 +54,66 @@ Le SBOM CycloneDX (dalla v1.2 alla v1.6+) strutturano i dati software attraverso
      }
    ]
    ```
-   Se $A$ include $B$ in `dependsOn`, $A$ dipende direttamente da $B$. Se $B$ dipende da $C$, $A$ dipende da $C$ in modo transitivo.
-4. **Vulnerabilità (`vulnerabilities[]`)**:
-   Rappresenta CVE o advisory di sicurezza noti (CycloneDX 1.4+ VEX/VDR):
-   - `id`: identificativo univoco (es. `CVE-2021-44228`).
-   - `ratings[]`: severità (`critical`, `high`, `medium`, `low`) e score CVSS numerico.
-   - `affects[]`: lista di oggetti `{"ref": "<bom-ref>"}`, che collegano la vulnerabilità ai componenti affetti tramite il loro `bom-ref`.
+   If $A$ includes $B$ in `dependsOn`, $A$ directly depends on $B$. If $B$ depends on $C$, $A$ transitively depends on $C$.
+4. **Vulnerabilities (`vulnerabilities[]`)**:
+   Represents known CVEs or security advisories (CycloneDX 1.4+ VEX/VDR):
+   - `id`: Unique identifier (e.g., `CVE-2021-44228`).
+   - `ratings[]`: Severity (`critical`, `high`, `medium`, `low`) and numerical CVSS score.
+   - `affects[]`: List of `{"ref": "<bom-ref>"}` objects connecting the vulnerability to affected components via their `bom-ref`.
 
 ---
 
-## 3. Limitazioni critiche di `sbom-utility`
+## 3. Critical limitations of `sbom-utility`
 
-Dall'analisi del codice sorgente Go di `sbom-utility` emergono limitazioni fondamentali rispetto a ciò che ci si aspetterebbe da un linguaggio di interrogazione completo per la sicurezza del software:
+Analyzing the Go source code of `sbom-utility` reveals fundamental limitations when compared to expectations for a full-fledged software security query language:
 
-1. **Assenza totale di supporto per Join / Correlazioni relazionali**:
-   `sbom-utility` opera solo su una singola collezione per volta. Non è possibile correlare `vulnerabilities` con `components`: ad esempio, non può rispondere alla domanda *"Mostra nome, versione e licenza dei componenti con vulnerabilità Critical"*.
-2. **Nessun supporto per l'analisi del Grafo delle Dipendenze**:
-   Non esiste alcun comando per calcolare:
-   - Dipendenze transitive (chiusura transitiva).
-   - Dipendenze inverse (*"Chi usa questa libreria?"* / reverse lookup).
-   - Cammini di dipendenza (*"Quale catena porta l'applicazione a importare la libreria X?"*).
-   Interrogare `--from dependencies` restituisce semplicemente la lista statica di adiacenze serializzata nel JSON.
-3. **Predicati di filtro (`--where`) estremamente primitivi**:
-   - Accetta solo uguaglianze regex `campo=regex`.
-   - Nessun supporto per `OR`, `NOT`, espressioni booleane annidate o parentesi.
-   - Nessun confronto numerico (es. `score >= 7.5`).
-   - Nessuna navigazione su campi annidati (es. `ratings[0].severity`).
-4. **Assenza di proiezioni avanzate e aggregazioni**:
-   Nessun supporto per `COUNT`, `DISTINCT`, alias (`AS`), o campi calcolati.
-5. **Overhead di esecuzione da C++**:
-   Invocare `sbom-utility` per ogni operazione richiede la generazione di processi esterni (`fork`/`exec`), parsing di stream JSON da pipe e dipendenza dall'installazione del binario Go sul sistema.
-
----
-
-## 4. Decisione Architetturale: Strategia Ibrida / Dual Engine
-
-In linea con le indicazioni del docente (*"ad esempio generando comandi sbom-utility... valutare una strategia ibrida in cui il DSL utilizza direttamente la struttura CycloneDX"*), la soluzione architetturale ideale comprende:
-
-1. **Generatore di Comandi `sbom-utility` (Target CLI)**:
-   - Il compilatore sa mappare le query base compatibili nei rispettivi comandi `sbom-utility query` e `sbom-utility component list`.
-   - Con il flag `--explain` o `--target=sbom-utility`, il compilatore mostra e può invocare i comandi nativi del tool.
-2. **Engine CycloneDX Nativo in C++ (Target In-Memory)**:
-   - Un motore C++ moderno basato su AST/IR, che analizza direttamente il documento CycloneDX (usando ad esempio `nlohmann/json`).
-   - Costruisce indici veloci in memoria: mappa hash dei `bom-ref`, grafo diretto e inverso delle dipendenze, indice `affects -> component`.
-   - Esegue join, chiusure transitive, algoritmi di cammino minimo e predicati complessi (`AND`, `OR`, `NOT`, confronti numerici).
-3. **Query Lowering formale**:
-   - I costrutti avanzati di sicurezza del DSL vengono trasformati in costrutti IR di base (scansioni, filtri, join relazionali, chiusure di grafi).
-   - Questo garantisce sia il rigore teorico richiesto dal corso di Compilatori, sia la massima utilità pratica nell'indagine sulla supply chain software.
+1. **Total lack of Join / Relational correlation support**:
+   `sbom-utility` operates on only a single collection at a time. It cannot correlate `vulnerabilities` with `components`: for instance, it cannot answer *"Show name, version, and license of components with Critical vulnerabilities"*.
+2. **No Dependency Graph analysis support**:
+   No commands exist to compute:
+   - Transitive dependencies (transitive closure).
+   - Reverse dependencies (*"Who uses this library?"* / reverse lookup).
+   - Dependency paths (*"Which chain leads the application to import library X?"*).
+   Querying `--from dependencies` simply returns the static adjacency list serialized in the JSON.
+3. **Extremely primitive filter predicates (`--where`)**:
+   - Only accepts regex equality `field=regex`.
+   - No support for `OR`, `NOT`, nested boolean expressions, or parentheses.
+   - No numerical comparisons (e.g., `score >= 7.5`).
+   - No navigation into nested fields (e.g., `ratings[0].severity`).
+4. **Lack of advanced projections and aggregations**:
+   No support for `COUNT`, `DISTINCT`, aliases (`AS`), or computed fields.
+5. **Execution overhead from C++**:
+   Invoking `sbom-utility` for each operation requires spawning external processes (`fork`/`exec`), parsing JSON streams from pipes, and depending on an installed Go binary on the host system.
 
 ---
 
-## 5. Quali funzionalità useremo ed esporremo nel DSL
+## 4. Architectural Decision: Hybrid Strategy / Dual Engine
 
-### Funzionalità esposte dal DSL:
-- **Query Base SQL-like**:
-  - `SELECT <campi>` con supporto a campi specifici o `*`.
-  - `FROM <collezione>` (`components`, `vulnerabilities`, `dependencies`, `metadata.component`).
-  - `WHERE <espressione>` con operatori `=`, `!=`, `<`, `<=`, `>`, `>=`, `LIKE`, `MATCHES`, `CONTAINS`, combinabili con `AND`, `OR`, `NOT` e parentesi.
-  - `ORDER BY <campo> [ASC | DESC]`.
+In line with the instructor's guidelines (*"for example by generating sbom-utility commands... evaluate a hybrid strategy where the DSL directly uses the CycloneDX structure"*), the ideal architectural solution comprises:
+
+1. **`sbom-utility` Command Generator (CLI Target)**:
+   - The compiler maps compatible basic queries into corresponding `sbom-utility query` and `sbom-utility component list` commands.
+   - Using the `--explain` or `--target=sbom-utility` flag, the compiler displays and can invoke the tool's native commands.
+2. **Native CycloneDX Engine in C++ (In-Memory Target)**:
+   - A modern C++ engine based on AST/IR that directly analyzes the CycloneDX document (using `nlohmann/json`).
+   - Builds fast in-memory indexes: hash map of `bom-ref`s, direct and reverse dependency graphs, `affects -> component` index.
+   - Executes joins, transitive closures, shortest path algorithms, and complex predicates (`AND`, `OR`, `NOT`, numerical comparisons).
+3. **Formal Query Lowering**:
+   - Advanced security constructs in the DSL are lowered into core IR primitives (scans, filters, relational joins, graph closures).
+   - This ensures both the theoretical rigor required by the Compilers course and maximum practical utility for software supply chain investigation.
+
+---
+
+## 5. Features we will use and expose in the DSL
+
+### Features exposed by the DSL:
+- **Basic SQL-like Queries**:
+  - `SELECT <fields>` with support for specific fields or `*`.
+  - `FROM <collection>` (`components`, `vulnerabilities`, `dependencies`, `metadata.component`).
+  - `WHERE <expression>` with operators `=`, `!=`, `<`, `<=`, `>`, `>=`, `LIKE`, `MATCHES`, `CONTAINS`, combinable with `AND`, `OR`, `NOT`, and parentheses.
+  - `ORDER BY <field> [ASC | DESC]`.
   - `LIMIT <n>`.
-- **Costrutti di Dominio Avanzati (Security & Supply Chain)**:
+- **Advanced Domain Constructs (Security & Supply Chain)**:
   - `WHO USES "<component-name>" [TRANSITIVE | DIRECT];`
   - `FIND VULNERABLE (COMPONENTS | LIBRARIES) [SEVERITY >= <level>] [WHERE ...];`
   - `SHOW DEPENDENCY PATH FROM "<source>" TO "<target>";`
@@ -121,7 +121,7 @@ In linea con le indicazioni del docente (*"ad esempio generando comandi sbom-uti
   - `FIND IMPACT OF VULNERABILITY "<cve-id>";`
   - `AUDIT LICENSES [ALLOWING (...) | REJECTING (...)];`
 
-### Funzionalità lasciate fuori e motivazione:
-- **Comandi di modifica (`patch`, `trim`)**: Il nostro progetto è un linguaggio di interrogazione e analisi (Query Language), non uno strumento di mutazione o patching di file JSON.
-- **Validazione con schema personalizzati (`validate --custom`)**: La validazione formale dell'input SBOM può essere eseguita a monte (o delegata direttamente al tool), ma non appartiene al dominio di un linguaggio di query.
-- **Supporto per formati diversi da CycloneDX JSON**: `sbom-utility query` supporta solo CycloneDX JSON (rifiuta SPDX o XML per le query). Mantenere il focus su CycloneDX JSON standard (v1.2–v1.6+) assicura la massima profondità semantica senza disperdere sforzi su parsing di formati eterogenei.
+### Excluded features and rationale:
+- **Modification commands (`patch`, `trim`)**: Our project is a query and analysis language (Query Language), not a tool for mutating or patching JSON files.
+- **Custom schema validation (`validate --custom`)**: Formal validation of the input SBOM can be performed upstream (or delegated directly to the tool), but does not belong to the domain of a query language.
+- **Support for non-CycloneDX JSON formats**: `sbom-utility query` only supports CycloneDX JSON (rejects SPDX or XML for queries). Keeping focus on standard CycloneDX JSON (v1.2–v1.6+) ensures maximum semantic depth without diluting efforts across heterogeneous format parsers.

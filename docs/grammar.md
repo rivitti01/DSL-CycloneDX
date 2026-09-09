@@ -1,34 +1,34 @@
-# Grammatica Formale (EBNF) del CycloneDX Query DSL
+# CycloneDX Query DSL Formal Grammar (EBNF)
 
-Questo documento specifica la sintassi e la grammatica formale del Domain Specific Language (DSL) per l'interrogazione di Software Bill of Materials (SBOM) CycloneDX, formalizzata in **Extended Backus-Naur Form (EBNF)**.
+This document specifies the syntax and formal grammar of the Domain Specific Language (DSL) for querying CycloneDX Software Bill of Materials (SBOM), formalized in **Extended Backus-Naur Form (EBNF)**.
 
 ---
 
-## 1. Analisi Lessicale (Lexical Grammar)
+## 1. Lexical Grammar
 
-### 1.1 Spazi Bianchi e Commenti
-Gli spazi bianchi (spazi, tabulazioni, ritorni a capo) fungono da delimitatori di token e vengono scartati durante la scansione:
+### 1.1 Whitespace and Comments
+Whitespace characters (spaces, tabs, newlines) serve as token delimiters and are discarded during lexical analysis:
 - `Whitespace ::= ( ' ' | '\t' | '\r' | '\n' )+`
-- **Commenti a riga singola (stile SQL)**: `-- commento fino a fine riga`
-- **Commenti a riga singola (stile C++)**: `// commento fino a fine riga`
-- **Commenti multiriga (stile C/C++)**: `/* commento multiriga */`
+- **Single-line comments (SQL style)**: `-- comment to end of line`
+- **Single-line comments (C++ style)**: `// comment to end of line`
+- **Multi-line comments (C/C++ style)**: `/* multi-line comment */`
 
-### 1.2 Parole Chiave (Keywords)
-Il lexer riconosce le parole chiave in modo **case-insensitive** (es. `SELECT`, `Select`, `select` sono equivalenti):
+### 1.2 Keywords
+The lexer recognizes keywords in a **case-insensitive** manner (e.g., `SELECT`, `Select`, and `select` are equivalent):
 
-- **Query Base SQL-like**:
+- **Basic SQL-like Queries**:
   `SELECT`, `FROM`, `WHERE`, `ORDER`, `BY`, `ASC`, `DESC`, `LIMIT`, `IN`
-- **Costrutti Avanzati di Sicurezza**:
+- **Advanced Security Constructs**:
   `WHO`, `USES`, `TRANSITIVE`, `DIRECT`
   `FIND`, `VULNERABLE`, `COMPONENTS`, `LIBRARIES`, `SEVERITY`
   `SHOW`, `TREE`, `DEPENDENCIES`, `OF`, `DEPTH`
   `BLAST`, `RADIUS`
-- **Operatori Logici e Predicati**:
+- **Logical Operators and Predicates**:
   `AND`, `OR`, `NOT`, `CONTAINS`, `MATCHES`, `LIKE`
-- **Livelli di Severità CVSS**:
+- **CVSS Severity Levels**:
   `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `NONE`
 
-### 1.3 Identificatori e Simboli
+### 1.3 Identifiers and Symbols
 ```ebnf
 Identifier      ::= ( Letter | '_' ) ( Letter | Digit | '_' | '-' )*
 Letter          ::= [a-zA-Z]
@@ -42,7 +42,7 @@ LParen          ::= '('
 RParen          ::= ')'
 ```
 
-### 1.4 Letterali (Literals)
+### 1.4 Literals
 ```ebnf
 StringLiteral   ::= '"' ( [^"\\] | EscapeSeq )* '"'
                   | "'" ( [^'\\] | EscapeSeq )* "'"
@@ -56,10 +56,10 @@ BooleanLiteral  ::= 'true' | 'false' | 'TRUE' | 'FALSE'
 
 ---
 
-## 2. Grammatica Sintattica (Syntactic Grammar)
+## 2. Syntactic Grammar
 
-### 2.1 Struttura del Programma
-Un programma DSL è composto da una sequenza di istruzioni separate da punto e virgola:
+### 2.1 Program Structure
+A DSL program consists of a sequence of statements separated by semicolons:
 ```ebnf
 Program         ::= Statement ( ';' Statement )* [ ';' ] EOF
 
@@ -72,7 +72,7 @@ Statement       ::= SelectStmt
 
 ---
 
-### 2.2 Query Base SQL-like (`SELECT`)
+### 2.2 Basic SQL-like Query (`SELECT`)
 ```ebnf
 SelectStmt      ::= "SELECT" ProjectionList
                     "FROM" CollectionRef
@@ -90,10 +90,10 @@ ColumnPath      ::= Identifier ( "." Identifier )*
 
 ---
 
-### 2.3 Costrutti Avanzati di Sicurezza
+### 2.3 Advanced Security Constructs
 
 #### `WHO USES` (Reverse Dependency Lookup)
-Trova tutte le componenti e l'applicazione principale che dipendono da una libreria bersaglio.
+Finds all components and the main root application that depend on a target library.
 ```ebnf
 WhoUsesStmt     ::= "WHO" "USES" TargetRef [ "TRANSITIVE" | "DIRECT" ] [ "IN" StringLiteral ]
 
@@ -101,7 +101,7 @@ TargetRef       ::= StringLiteral | Identifier
 ```
 
 #### `FIND VULNERABLE` (Cross-domain Relational Join)
-Seleziona componenti o librerie correlando la tabella dei componenti con il catalogo delle vulnerabilità CycloneDX (VEX/VDR).
+Selects components or libraries by correlating the components table with the CycloneDX vulnerability catalog (VEX/VDR).
 ```ebnf
 FindVulnerableStmt ::= "FIND" "VULNERABLE" ( "COMPONENTS" | "LIBRARIES" )
                        [ "SEVERITY" [ CompOp ] SeverityLevel ]
@@ -112,7 +112,7 @@ SeverityLevel   ::= "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO" | "NONE"
 ```
 
 #### `SHOW TREE` (Forward Dependency Graph)
-Visualizza l'albero gerarchico delle dipendenze a partire da una radice fino a una profondità specificata.
+Visualizes the hierarchical dependency tree starting from a root node up to a specified depth.
 ```ebnf
 ShowTreeStmt    ::= "SHOW" ( "TREE" | "DEPENDENCIES" )
                     [ "OF" TargetRef ]
@@ -121,21 +121,21 @@ ShowTreeStmt    ::= "SHOW" ( "TREE" | "DEPENDENCIES" )
 ```
 
 #### `FIND BLAST RADIUS` (Supply Chain Impact Analysis)
-Calcola il raggio d'impatto di una vulnerabilità lungo la catena di dipendenze transitive fino all'applicazione radice.
+Computes the blast radius of a vulnerability along the transitive dependency chain up to the root application.
 ```ebnf
 BlastRadiusStmt ::= "FIND" "BLAST" "RADIUS" "OF" TargetRef [ "IN" StringLiteral ]
 ```
 
 ---
 
-### 2.4 Espressioni e Predicati (`WHERE`)
+### 2.4 Expressions and Predicates (`WHERE`)
 
-Le espressioni supportano la precedenza classica degli operatori booleani e relazionali:
-- `OR` (precedenza minima)
+Expressions support standard boolean and relational operator precedence:
+- `OR` (lowest precedence)
 - `AND`
 - `NOT`
-- Operatori di confronto e stringa (`=`, `!=`, `<`, `<=`, `>`, `>=`, `CONTAINS`, `MATCHES`, `LIKE`)
-- Espressioni primarie e parentesi `( ... )` (precedenza massima)
+- Comparison and string operators (`=`, `!=`, `<`, `<=`, `>`, `>=`, `CONTAINS`, `MATCHES`, `LIKE`)
+- Primary expressions and parentheses `( ... )` (highest precedence)
 
 ```ebnf
 Expression      ::= OrExpr
@@ -165,7 +165,7 @@ Literal         ::= StringLiteral
 
 ---
 
-## 3. Proprietà della Grammatica
-1. **Assenza di ambiguità**: La sintassi delle istruzioni è deterministica con lookahead $k=1$ (LL(1)).
-2. **Associatività a sinistra**: Gli operatori binari sono associativi a sinistra (`left-associative`).
-3. **Precedenza climbing**: Le espressioni della clausola `WHERE` sono analizzate mediante **Pratt Parsing** (Precedence Climbing), garantendo tempo di parsing lineare $O(N)$ e gestione pulita delle precedenze.
+## 3. Grammar Properties
+1. **Unambiguous**: Statement syntax is deterministic with $k=1$ lookahead (LL(1)).
+2. **Left-associative**: Binary operators are left-associative.
+3. **Precedence climbing**: Expressions within the `WHERE` clause are parsed using **Pratt Parsing** (Precedence Climbing), ensuring linear $O(N)$ parsing time and clean precedence management.

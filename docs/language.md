@@ -1,69 +1,69 @@
-# Manuale di Riferimento del Linguaggio (DSL Reference)
+# Language Reference Manual (DSL Reference)
 
-Il **CycloneDX Query DSL** è un linguaggio orientato al dominio ideato per consentire a sviluppatori, analisti di sicurezza e responsabili della supply chain di interrogare, filtrare e analizzare Software Bill of Materials (SBOM) nel formato standard CycloneDX.
-
----
-
-## 1. Struttura Generale delle Query
-
-Ogni istruzione termina con un punto e virgola `;`. Più istruzioni possono essere scritte in sequenza nello stesso script o sessione interattiva.
-
-È possibile inserire commenti:
-```sql
--- Commento stile SQL a riga singola
-// Commento stile C++ a riga singola
-/* Commento
-   multiriga */
-```
-
-Il file SBOM da interrogare può essere specificato:
-1. All'interno della query tramite la clausola `IN "percorso/file.json"`;
-2. Da riga di comando tramite l'opzione `-b percorso/file.json`;
-3. Nella sessione interattiva tramite il comando `:bom percorso/file.json`.
+The **CycloneDX Query DSL** is a domain-oriented language designed to enable developers, security analysts, and supply chain managers to query, filter, and analyze Software Bill of Materials (SBOM) documents conforming to the CycloneDX standard.
 
 ---
 
-## 2. Query Base SQL-like (`SELECT`)
+## 1. General Query Structure
 
-### 2.1 Sintassi
+Each statement terminates with a semicolon `;`. Multiple statements can be written sequentially in the same script or interactive session.
+
+Comments are supported using SQL or C/C++ style syntax:
 ```sql
-SELECT <proiezioni>
-FROM <collezione>
-[IN "<file_sbom.json>"]
-[WHERE <condizione>]
-[ORDER BY <campo> [ASC | DESC]]
-[LIMIT <numero>];
+-- Single-line SQL-style comment
+// Single-line C++-style comment
+/* Multi-line
+   comment */
 ```
 
-### 2.2 Collezioni Supportate (`FROM`)
-- `components`: Elenco dei componenti software (librerie, framework, moduli).
-- `vulnerabilities`: Catalogo delle vulnerabilità dichiarate (CycloneDX VEX/VDR).
-- `dependencies`: Grafo delle dipendenze dirette (`ref` e `dependsOn`).
-- `metadata.component`: Informazioni sull'applicazione o sistema radice.
+The target SBOM file can be specified in three ways:
+1. Inside the query using the `IN "path/to/file.json"` clause;
+2. Via the command-line flag `-b path/to/file.json`;
+3. Within an interactive REPL session using `:bom path/to/file.json`.
 
-### 2.3 Proiezioni
-- `SELECT *` seleziona tutti i campi disponibili.
-- `SELECT campo1, campo2, ...` seleziona solo i campi specificati (es. `name, version, type, purl`).
+---
 
-### 2.4 Condizioni di Filtro (`WHERE`)
-Supporta espressioni logiche e relazionali complete:
-- **Uguaglianza e disuguaglianza**: `=`, `!=`
-- **Confronti numerici / ordinamento**: `<`, `<=`, `>`, `>=`
-- **Operatori logici**: `AND`, `OR`, `NOT`, con parentesi tonde `( ... )`
-- **Operatori di stringa**:
-  - `CONTAINS`: verifica se la stringa contiene una sottostringa (es. `name CONTAINS 'log4j'`).
-  - `MATCHES` o `LIKE`: corrispondenza tramite espressione regolare (es. `version MATCHES '^2\..*'`).
+## 2. Basic SQL-like Queries (`SELECT`)
 
-### 2.5 Esempi
+### 2.1 Syntax
 ```sql
--- Tutte le librerie ordinate per nome
+SELECT <projections>
+FROM <collection>
+[IN "<sbom_file.json>"]
+[WHERE <condition>]
+[ORDER BY <field> [ASC | DESC]]
+[LIMIT <number>];
+```
+
+### 2.2 Supported Collections (`FROM`)
+- `components`: Inventory of software components (libraries, frameworks, modules).
+- `vulnerabilities`: Catalog of declared vulnerabilities (CycloneDX VEX/VDR).
+- `dependencies`: Direct dependency graph (`ref` and `dependsOn`).
+- `metadata.component`: Information regarding the primary application or root system.
+
+### 2.3 Projections
+- `SELECT *` selects all available fields.
+- `SELECT field1, field2, ...` selects only the specified fields (e.g., `name, version, type, purl`).
+
+### 2.4 Filter Conditions (`WHERE`)
+Supports comprehensive logical and relational expressions:
+- **Equality and inequality**: `=`, `!=`
+- **Numerical comparisons / ordering**: `<`, `<=`, `>`, `>=`
+- **Logical operators**: `AND`, `OR`, `NOT`, with parentheses `( ... )`
+- **String operators**:
+  - `CONTAINS`: checks if a string contains a substring (e.g., `name CONTAINS 'log4j'`).
+  - `MATCHES` or `LIKE`: regex pattern matching (e.g., `version MATCHES '^2\..*'`).
+
+### 2.5 Examples
+```sql
+-- All libraries ordered by name
 SELECT name, version, purl
 FROM components
 WHERE type = 'library'
 ORDER BY name ASC
 LIMIT 10;
 
--- Vulnerabilità con score CVSS elevato
+-- Vulnerabilities with high CVSS score
 SELECT id, cvss-severity, score
 FROM vulnerabilities
 WHERE score >= 7.5 AND (severity = CRITICAL OR severity = HIGH);
@@ -71,95 +71,95 @@ WHERE score >= 7.5 AND (severity = CRITICAL OR severity = HIGH);
 
 ---
 
-## 3. Costrutti Avanzati di Sicurezza
+## 3. Advanced Security Constructs
 
 ### 3.1 `WHO USES` (Reverse Dependency Lookup)
-Risponde alla domanda fondamentale: *"Chi nel mio progetto sta usando questa specifica libreria?"*.
+Answers the critical supply chain question: *"Which components in my project are using this specific library?"*.
 
 ```sql
 WHO USES "<component-identifier>" [TRANSITIVE | DIRECT] [IN "<file.json>"];
 ```
-- Se omesso, il comportamento predefinito è `TRANSITIVE` (esplora l'intera catena di dipendenze fino alla radice).
-- Se specificato `DIRECT`, considera solo chi ha dichiarato la dipendenza diretta immediata.
+- When omitted, the default behavior is `TRANSITIVE` (explores the entire dependency chain up to the root).
+- If `DIRECT` is specified, only components that declare an immediate direct dependency are returned.
 
-**Esempio:**
+**Example:**
 ```sql
 WHO USES "log4j-core" TRANSITIVE;
 ```
 
 ---
 
-### 3.2 `FIND VULNERABLE` (Correlazione Vulnerabilità-Componenti)
-Esegue un join relazionale automatico tra il catalogo delle vulnerabilità e i componenti, correlando gli attributi software con gli advisory di sicurezza.
+### 3.2 `FIND VULNERABLE` (Vulnerability-Component Correlation)
+Performs an automatic relational join between the vulnerability catalog and components, correlating component metadata with security advisories.
 
 ```sql
 FIND VULNERABLE (COMPONENTS | LIBRARIES)
-[SEVERITY [= | != | < | <= | > | >=] <livello>]
-[WHERE <condizione_aggiuntiva>]
+[SEVERITY [= | != | < | <= | > | >=] <level>]
+[WHERE <additional_condition>]
 [IN "<file.json>"];
 ```
-- `COMPONENTS`: considera tutti i componenti (applicazioni, container, librerie, moduli).
-- `LIBRARIES`: restringe l'analisi alle sole librerie di terze parti.
-- `SEVERITY`: filtro sulla severità CVSS (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `NONE`).
+- `COMPONENTS`: analyzes all components (applications, containers, libraries, modules).
+- `LIBRARIES`: restricts the analysis strictly to third-party libraries.
+- `SEVERITY`: filters by CVSS severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `NONE`).
 
-**Esempi:**
+**Examples:**
 ```sql
--- Trova librerie con vulnerabilità ad alta gravità
+-- Find libraries with high or critical severity vulnerabilities
 FIND VULNERABLE LIBRARIES SEVERITY >= HIGH;
 
--- Trova vulnerabilità con CWE specifico
+-- Find vulnerable components with a specific CWE
 FIND VULNERABLE COMPONENTS WHERE cwe = 502;
 ```
 
 ---
 
-### 3.3 `SHOW TREE` (Visualizzazione Albero delle Dipendenze)
-Ricostruisce la gerarchia delle dipendenze dirette e transitive.
+### 3.3 `SHOW TREE` (Dependency Tree Visualization)
+Reconstructs the hierarchical structure of direct and transitive dependencies.
 
 ```sql
 SHOW (TREE | DEPENDENCIES) [OF "<component-name>"] [DEPTH <n>] [IN "<file.json>"];
 ```
-- `OF "<component>"`: seleziona il nodo radice dell'albero (se omesso, usa l'applicazione definita in `metadata.component`).
-- `DEPTH <n>`: limita la profondità massima dell'albero di dipendenze.
+- `OF "<component>"`: selects the root node of the tree (if omitted, defaults to the application defined in `metadata.component`).
+- `DEPTH <n>`: bounds the maximum depth of the displayed dependency tree.
 
-**Esempio:**
+**Example:**
 ```sql
 SHOW TREE OF "my-web-app" DEPTH 3;
 ```
 
 ---
 
-### 3.4 `FIND BLAST RADIUS` (Analisi del Raggio d'Impatto)
-Calcola l'esposizione globale del sistema rispetto a una vulnerabilità nota (CVE).
+### 3.4 `FIND BLAST RADIUS` (Impact Analysis)
+Computes the global blast radius and exposure of the system relative to a known vulnerability (CVE).
 
 ```sql
 FIND BLAST RADIUS OF "<cve-id>" [IN "<file.json>"];
 ```
-Restituisce un report sintetico con:
-- CVSS Score e gravità dell'advisory;
-- Componenti direttamente affetti;
-- Componenti transitivamente impattati;
-- Percentuale di compromissione della supply chain (`Blast Radius %`);
-- Verifica se l'applicazione principale di primo livello è direttamente o transitivamente esposta.
+Returns a summary report containing:
+- CVSS Score and advisory severity;
+- Directly affected components;
+- Transitively impacted components;
+- Supply chain compromise percentage (`Blast Radius %`);
+- Assessment of whether the top-level root application is directly or transitively exposed.
 
-**Esempio:**
+**Example:**
 ```sql
 FIND BLAST RADIUS OF "CVE-2021-44228";
 ```
 
 ---
 
-## 4. Modalità di Esecuzione e Formattazione
+## 4. Execution Modes and Formatting
 
-### 4.1 Formati di Output (`-f`, `--format`)
-1. **Tabella ASCII (`table`)**: Formato predefinito con colonne allineate, statistiche di riga e tempo di esecuzione.
-2. **JSON (`json`)**: Output standard JSON per pipeline CI/CD o integrazione con altri script.
-3. **Albero (`tree`)**: Visualizzazione gerarchica con caratteri ad albero (`├──`, `└──`) particolarmente indicata per `SHOW TREE`.
+### 4.1 Output Formats (`-f`, `--format`)
+1. **ASCII Table (`table`)**: Default format with aligned columns, row count statistics, and execution time.
+2. **JSON (`json`)**: Standard JSON output suitable for CI/CD pipelines or scripting integration.
+3. **Tree (`tree`)**: Hierarchical tree visualization using box-drawing characters (`├──`, `└──`), ideal for `SHOW TREE`.
 
-### 4.2 Modalità Spiegazione (`--explain`)
-Aggiungendo `--explain` alla riga di comando (o `:explain on` nella REPL), il compilatore mostra in dettaglio:
-1. Token generati dal Lexer con coordinate `linea:colonna`;
-2. Albero sintattico astratto (`AST`);
-3. Esito dell'analisi semantica e validazione tipi;
-4. Piano di esecuzione abbassato (`IR Execution Plan`);
-5. Mapping ed eventuale comando `sbom-utility` sintetizzato.
+### 4.2 Explain Mode (`--explain`)
+Adding `--explain` to the command line (or `:explain on` in the REPL) outputs a detailed breakdown of each compilation phase:
+1. Lexer-generated tokens with `line:column` coordinates;
+2. Abstract Syntax Tree (`AST`);
+3. Semantic analysis and type validation report;
+4. Lowered execution plan (`IR Execution Plan`);
+5. Mapping and synthesized `sbom-utility` command (if applicable).

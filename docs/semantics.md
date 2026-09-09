@@ -1,21 +1,21 @@
-# Analisi Semantica e Type System (Semantics)
+# Semantic Analysis and Type System (Semantics)
 
-Questo documento definisce le regole semantiche, il modello dei dati e il type system implementati nella fase di **Semantic Analysis** del CycloneDX Query DSL.
+This document defines the semantic rules, data model, and type system implemented during the **Semantic Analysis** phase of the CycloneDX Query DSL.
 
 ---
 
-## 1. Modello di Dominio CycloneDX e Simboli
+## 1. CycloneDX Domain Model and Symbols
 
-Il compilatore include uno **Schema Catalog** a conoscenza delle specifiche CycloneDX (v1.2 – v1.6+). Le collezioni valide e i rispettivi campi sono formalizzati come segue:
+The compiler incorporates a **Schema Catalog** aware of the CycloneDX specifications (v1.2 – v1.6+). Valid collections and their respective fields are formalized as follows:
 
-### 1.1 Collezioni Valide
-- `components`: Catalogo delle componenti software (librerie, framework, moduli, container).
-- `vulnerabilities`: Catalogo delle vulnerabilità dichiarate (CycloneDX VEX/VDR).
-- `dependencies`: Grafo delle dipendenze espresse come liste di adiacenza (`ref` $\rightarrow$ `dependsOn[]`).
-- `metadata.component`: Descrizione del componente primario o applicazione radice.
-- `services`: Servizi ed endpoint dichiarati nell'architettura.
+### 1.1 Valid Collections
+- `components`: Inventory of software components (libraries, frameworks, modules, containers).
+- `vulnerabilities`: Catalog of declared vulnerabilities (CycloneDX VEX/VDR).
+- `dependencies`: Dependency graph represented as adjacency lists (`ref` $\rightarrow$ `dependsOn[]`).
+- `metadata.component`: Description of the primary root component or application.
+- `services`: Declared services and endpoints within the architecture.
 
-Tentare di interrogare una collezione non registrata produce un errore semantico:
+Attempting to query an unregistered collection triggers an immediate semantic error:
 ```
 error: Unknown collection 'unknown_coll'. Valid collections are: components, vulnerabilities, dependencies, metadata.component, services
 ```
@@ -24,62 +24,62 @@ error: Unknown collection 'unknown_coll'. Valid collections are: components, vul
 
 ## 2. Type System
 
-Il DSL implementa un sistema di tipi statico ma flessibile per validare espressioni e predicati prima dell'esecuzione:
+The DSL implements a static yet flexible type system to validate expressions and predicates prior to execution:
 
-| Tipo | Descrizione | Esempi |
+| Type | Description | Examples |
 | :--- | :--- | :--- |
-| `String` | Testo alfanumerico | `"express"`, `'library'`, `"CVE-2021-44228"` |
-| `Integer` | Numero intero | `10`, `502`, `1321` |
-| `Float` | Numero decimale a virgola mobile | `7.5`, `9.8`, `10.0` |
-| `Boolean` | Valore di verità | `true`, `false` |
-| `Severity` | Livello di severità CVSS ordinato | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `NONE` |
-| `Array` | Vettore di elementi | `dependencies[].dependsOn`, `vulnerabilities[].cwes` |
-| `Object` | Struttura JSON annidata | `ratings[0]`, `supplier` |
+| `String` | Alphanumeric text | `"express"`, `'library'`, `"CVE-2021-44228"` |
+| `Integer` | Whole number | `10`, `502`, `1321` |
+| `Float` | Decimal floating-point number | `7.5`, `9.8`, `10.0` |
+| `Boolean` | Truth value | `true`, `false` |
+| `Severity` | Ordered CVSS severity level | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `NONE` |
+| `Array` | List/vector of elements | `dependencies[].dependsOn`, `vulnerabilities[].cwes` |
+| `Object` | Nested JSON object structure | `ratings[0]`, `supplier` |
 
-### 2.1 Regole di Inferenza di Tipo delle Espressioni
-1. **Letterali**: Il tipo corrisponde al valore del token (`String`, `Integer`, `Float`, `Boolean`, `Severity`).
-2. **Riferimenti a colonna (`ColumnRefExpr`)**:
+### 2.1 Expression Type Inference Rules
+1. **Literals**: The type directly matches the token value (`String`, `Integer`, `Float`, `Boolean`, `Severity`).
+2. **Column References (`ColumnRefExpr`)**:
    - `ratings.severity`, `severity`, `cvss-severity` $\rightarrow$ `Severity`
    - `ratings.score`, `score` $\rightarrow$ `Float`
    - `cwe` $\rightarrow$ `Integer`
    - `name`, `version`, `type`, `bom-ref`, `purl`, `description`, `id` $\rightarrow$ `String`
-3. **Operatori Unari**:
-   - `NOT <expr>`: richiede che `<expr>` sia di tipo `Boolean` e produce `Boolean`.
-4. **Operatori Binari**:
-   - Qualsiasi operatore di confronto (`=`, `!=`, `<`, `<=`, `>`, `>=`, `CONTAINS`, `MATCHES`, `LIKE`) produce un risultato di tipo `Boolean`.
-   - Gli operatori logici (`AND`, `OR`) richiedono che entrambi gli operandi siano di tipo `Boolean` e producono `Boolean`.
+3. **Unary Operators**:
+   - `NOT <expr>`: requires `<expr>` to be of type `Boolean` and evaluates to `Boolean`.
+4. **Binary Operators**:
+   - Any comparison operator (`=`, `!=`, `<`, `<=`, `>`, `>=`, `CONTAINS`, `MATCHES`, `LIKE`) yields a result of type `Boolean`.
+   - Logical operators (`AND`, `OR`) require both operands to be of type `Boolean` and yield `Boolean`.
 
 ---
 
-## 3. Matrice di Compatibilità degli Operatori
+## 3. Operator Compatibility Matrix
 
-| Operatore | Operando Sinistro | Operando Destro | Validità | Note |
+| Operator | Left Operand | Right Operand | Validity | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| `=`, `!=` | `T` | `T` | **Valido** | Uguaglianza per tipi identici |
-| `=`, `!=` | `Integer` | `Float` | **Valido** | Promozione numerica implicita |
-| `<`, `<=`, `>`, `>=` | `Numeric` | `Numeric` | **Valido** | Confronto d'ordine numerico |
-| `<`, `<=`, `>`, `>=` | `Severity` | `Severity` | **Valido** | Ordinamento CVSS (`NONE` < `INFO` < `LOW` < `MEDIUM` < `HIGH` < `CRITICAL`) |
-| `<`, `<=`, `>`, `>=` | `String` | `Numeric` | **Errore Semantico** | Incompatibilità di tipo |
-| `AND`, `OR` | `Boolean` | `Boolean` | **Valido** | Connettivi logici |
-| `AND`, `OR` | `String` | `Boolean` | **Errore Semantico** | Operando sinistro non booleano |
-| `CONTAINS` | `String` | `String` | **Valido** | Sottostringa case-sensitive o insensitive |
-| `MATCHES`, `LIKE` | `String` | `String` (Regex) | **Valido** | Corrispondenza regex ECMAScript/POSIX |
+| `=`, `!=` | `T` | `T` | **Valid** | Equality for identical types |
+| `=`, `!=` | `Integer` | `Float` | **Valid** | Implicit numeric promotion |
+| `<`, `<=`, `>`, `>=` | `Numeric` | `Numeric` | **Valid** | Numeric order comparison |
+| `<`, `<=`, `>`, `>=` | `Severity` | `Severity` | **Valid** | CVSS severity order (`NONE` < `INFO` < `LOW` < `MEDIUM` < `HIGH` < `CRITICAL`) |
+| `<`, `<=`, `>`, `>=` | `String` | `Numeric` | **Semantic Error** | Type mismatch |
+| `AND`, `OR` | `Boolean` | `Boolean` | **Valid** | Logical connectives |
+| `AND`, `OR` | `String` | `Boolean` | **Semantic Error** | Non-boolean left operand |
+| `CONTAINS` | `String` | `String` | **Valid** | Substring check (case-sensitive or insensitive) |
+| `MATCHES`, `LIKE` | `String` | `String` (Regex) | **Valid** | ECMAScript/POSIX regex matching |
 
 ---
 
-## 4. Vincoli Semantici delle Istruzioni
+## 4. Statement Semantic Constraints
 
-### 4.1 Clausola `LIMIT`
-- Il valore associato a `LIMIT` deve essere un intero strettamente positivo ($> 0$). Un valore nullo o negativo solleva un errore semantico immediato:
+### 4.1 `LIMIT` Clause
+- The value specified in `LIMIT` must be a strictly positive integer ($> 0$). A zero or negative value raises an immediate semantic error:
   ```
   error: LIMIT must be greater than 0
   ```
 
-### 4.2 Parametro `DEPTH` (`SHOW TREE`)
-- Il valore di profondità massima deve essere un intero positivo ($> 0$):
+### 4.2 `DEPTH` Parameter (`SHOW TREE`)
+- The maximum depth value must be a positive integer ($> 0$):
   ```
   error: DEPTH must be greater than 0
   ```
 
-### 4.3 Bersaglio `WHO USES` e `FIND BLAST RADIUS`
-- L'identificatore del componente o la CVE non possono essere stringhe vuote.
+### 4.3 Target for `WHO USES` and `FIND BLAST RADIUS`
+- The target component identifier or CVE identifier must not be empty strings.

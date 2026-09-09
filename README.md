@@ -5,57 +5,57 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-Passing%20(100%25)-brightgreen.svg)]()
 
-> Progetto per il corso di **Formal Languages and Compilers** — Politecnico di Milano.  
-> Obiettivo: Progettazione e implementazione di un compilatore completo per un Domain Specific Language (DSL) per l'interrogazione e l'analisi di sicurezza di Software Bill of Materials (SBOM) in formato **CycloneDX**.
+> Project for the **Formal Languages and Compilers** course — Politecnico di Milano.  
+> Objective: Design and implementation of a complete compiler for a Domain Specific Language (DSL) targeting querying and security analysis of Software Bill of Materials (SBOM) in **CycloneDX** format.
 
 ---
 
-## Indice dei Contenuti
-- [Panoramica del Progetto](#panoramica-del-progetto)
-- [Architettura del Compilatore](#architettura-del-compilatore)
-- [Funzionalità del Linguaggio](#funzionalità-del-linguaggio)
-  - [Query Base SQL-like](#1-query-base-sql-like)
-  - [Costrutti Avanzati di Sicurezza](#2-costrutti-avanzati-di-sicurezza-30l)
-- [Requisiti e Compilazione](#requisiti-e-compilazione)
-- [Esecuzione dei Test](#esecuzione-dei-test)
-- [Guida alla CLI](#guida-alla-cli)
-  - [Modalità Explain (`--explain`)](#modalità-explain---explain)
-  - [Sessione Interattiva (REPL)](#sessione-interattiva-repl)
-- [Documentazione Completa](#documentazione-completa)
-- [Limitazioni e Sviluppi Futuri](#limitazioni-e-sviluppi-futuri)
+## Table of Contents
+- [Project Overview](#project-overview)
+- [Compiler Architecture](#compiler-architecture)
+- [Language Features](#language-features)
+  - [Basic SQL-like Queries](#1-basic-sql-like-queries)
+  - [Advanced Security Constructs](#2-advanced-security-constructs-30l)
+- [Requirements and Build](#requirements-and-build)
+- [Running Tests](#running-tests)
+- [CLI Guide](#cli-guide)
+  - [Explain Mode (`--explain`)](#explain-mode---explain)
+  - [Interactive Shell (REPL)](#interactive-shell-repl)
+- [Complete Documentation](#complete-documentation)
+- [Limitations and Future Work](#limitations-and-future-work)
 
 ---
 
-## Panoramica del Progetto
+## Project Overview
 
-Una Software Bill of Materials (SBOM) è l'inventario formale di tutti i componenti software, le dipendenze e le vulnerabilità note di un'applicazione. Il formato **CycloneDX** (OWASP) è uno dei principali standard industriali.
+A Software Bill of Materials (SBOM) is the formal inventory of all software components, dependencies, and known vulnerabilities of an application. The **CycloneDX** format (OWASP) is one of the leading industry standards.
 
-Questo progetto realizza un compilatore e interprete C++20 modulare che implementa:
-1. **Un linguaggio SQL-like** per interrogare in modo selettivo le collezioni CycloneDX (`components`, `vulnerabilities`, `dependencies`, `metadata.component`).
-2. **Costrutti semantici di alto livello per la sicurezza del software** (`WHO USES`, `FIND VULNERABLE`, `SHOW TREE`, `FIND BLAST RADIUS`).
-3. **Query Lowering formale**: i costrutti di alto livello vengono compilati in un piano algebrico di **Intermediate Representation (IR)** costituito da primitive relazionali e di grafo.
-4. **Dual Backend Esecutivo**:
-   - **`sbom-utility` Code Generator**: genera ed emette comandi CLI per il tool ufficiale OWASP [`sbom-utility`](https://github.com/CycloneDX/sbom-utility);
-   - **Native CycloneDX Engine**: motore C++ in memoria con indici hash e algoritmi di grafo (BFS, cammini, chiusure transitive) che supera le limitazioni del tool Go (che non supporta né join né grafi).
+This project implements a modular C++20 compiler and interpreter featuring:
+1. **A SQL-like query language** to selectively query CycloneDX collections (`components`, `vulnerabilities`, `dependencies`, `metadata.component`).
+2. **High-level software security semantic constructs** (`WHO USES`, `FIND VULNERABLE`, `SHOW TREE`, `FIND BLAST RADIUS`).
+3. **Formal Query Lowering**: High-level constructs are compiled into an algebraic **Intermediate Representation (IR)** execution plan consisting of relational and graph primitives.
+4. **Dual Execution Backend**:
+   - **`sbom-utility` Code Generator**: Generates and emits CLI commands for the official OWASP [`sbom-utility`](https://github.com/CycloneDX/sbom-utility) tool;
+   - **Native CycloneDX Engine**: In-memory C++ engine with hash indexes and graph algorithms (BFS, paths, transitive closures) that overcomes the limitations of the Go tool (which supports neither joins nor graphs).
 
 ---
 
-## Architettura del Compilatore
+## Compiler Architecture
 
-La pipeline segue rigorosamente le fasi classiche dell'ingegneria dei compilatori:
+The compilation pipeline strictly follows classical compiler engineering phases:
 
 ```
 [ DSL Source ]
       ↓
-[ Lexer ]                  → Scansione lessicale con tracciamento riga/colonna (SourceLocation)
+[ Lexer ]                  → Lexical scanning with line/column tracking (SourceLocation)
       ↓
-[ Parser ]                 → Recursive Descent (Statements) + Pratt Parser (Precedenza Espressioni)
+[ Parser ]                 → Recursive Descent (Statements) + Pratt Parser (Expression Precedence)
       ↓
-[ AST ]                    → Abstract Syntax Tree C++20 con Pattern Visitor
+[ AST ]                    → C++20 Abstract Syntax Tree with Visitor Pattern
       ↓
-[ Semantic Analysis ]      → Type Checking e Schema Catalog CycloneDX (v1.2 - v1.6+)
+[ Semantic Analysis ]      → Type Checking & CycloneDX Schema Catalog (v1.2 - v1.6+)
       ↓
-[ Query Lowerer ]          → Abbassamento dell'AST in piano IR relazionale/grafo
+[ Query Lowerer ]          → AST lowering to relational/graph IR plan
       ↓
 [ Intermediate Rep (IR) ]  → Scan, Filter, Project, Sort, Limit, HashJoin, GraphTraverse, BlastRadius
       ↓
@@ -63,21 +63,21 @@ La pipeline segue rigorosamente le fasi classiche dell'ingegneria dei compilator
   |                               |
   v                               v
 [ sbom-utility CodeGen ]      [ Native CycloneDX Engine ]
-(Generazione comandi CLI)      (Esecuzione in-memory con grafi e indici hash)
+(CLI command generation)       (In-memory execution with graphs & hash indexes)
   |                               |
   +---------------+---------------+
                   ↓
-          [ Query Results ]   (Tabella ASCII, JSON, Albero gerarchico)
+          [ Query Results ]   (ASCII Table, JSON, Hierarchical Tree)
 ```
 
-Per maggiori dettagli, consultare [docs/architecture.md](docs/architecture.md).
+For more details, consult [docs/architecture.md](docs/architecture.md).
 
 ---
 
-## Funzionalità del Linguaggio
+## Language Features
 
-### 1. Query Base SQL-like
-Permette di proiettare e filtrare componenti, vulnerabilità e dipendenze:
+### 1. Basic SQL-like Queries
+Allows projecting and filtering components, vulnerabilities, and dependencies:
 ```sql
 SELECT name, version, purl
 FROM components
@@ -87,90 +87,90 @@ ORDER BY name ASC
 LIMIT 10;
 ```
 
-### 2. Costrutti Avanzati di Sicurezza (30L)
+### 2. Advanced Security Constructs (30L)
 
-| Costrutto | Problema di Sicurezza Risolto | Piano IR Abbassato |
+| Construct | Security Problem Solved | Lowered IR Plan |
 | :--- | :--- | :--- |
-| `WHO USES "lib" [TRANSITIVE];` | Identifica tutti i componenti e l'applicazione radice che dipendono da una libreria. | `Project -> HashJoin -> GraphTraverse(Reverse) -> Scan(dependencies)` |
-| `FIND VULNERABLE LIBRARIES SEVERITY >= HIGH;` | Esegue il join relazionale tra catalogo vulnerabilità (VEX/VDR) e componenti. | `Project -> HashJoin(affects == bom-ref) -> Filter(vulns) / Filter(comps)` |
-| `SHOW TREE OF "app" DEPTH 2;` | Ispezione visiva della gerarchia delle dipendenze dirette e transitive. | `Project -> HashJoin -> GraphTraverse(Forward, depth=2) -> Scan(dependencies)` |
-| `FIND BLAST RADIUS OF "CVE-...";` | Calcola percentuale di impatto della supply chain ed esposizione della root app. | `BlastRadius -> ReverseReachability -> Scan(vulnerabilities)` |
+| `WHO USES "lib" [TRANSITIVE];` | Identifies all components and the root application depending on a library. | `Project -> HashJoin -> GraphTraverse(Reverse) -> Scan(dependencies)` |
+| `FIND VULNERABLE LIBRARIES SEVERITY >= HIGH;` | Performs relational join between vulnerability catalog (VEX/VDR) and components. | `Project -> HashJoin(affects == bom-ref) -> Filter(vulns) / Filter(comps)` |
+| `SHOW TREE OF "app" DEPTH 2;` | Visual inspection of direct and transitive dependency hierarchy. | `Project -> HashJoin -> GraphTraverse(Forward, depth=2) -> Scan(dependencies)` |
+| `FIND BLAST RADIUS OF "CVE-...";` | Computes supply chain impact percentage and root application exposure. | `BlastRadius -> ReverseReachability -> Scan(vulnerabilities)` |
 
-Per maggiori dettagli, consultare [docs/advanced-features.md](docs/advanced-features.md) e [docs/language.md](docs/language.md).
+For more details, consult [docs/advanced-features.md](docs/advanced-features.md) and [docs/language.md](docs/language.md).
 
 ---
 
-## Requisiti e Compilazione
+## Requirements and Build
 
-### Requisiti
-- Compilatore C++ moderno con supporto completo **C++20** (AppleClang 15+, GCC 11+, Clang 13+);
+### Requirements
+- Modern C++ compiler with full **C++20** support (AppleClang 15+, GCC 11+, Clang 13+);
 - **CMake 3.20+**;
-- Connessione ad internet per il primo fetch automatico delle dipendenze header-only (`nlohmann/json` e `doctest` via `FetchContent`).
+- Internet connection for the initial automatic fetch of header-only dependencies (`nlohmann/json` and `doctest` via `FetchContent`).
 
-### Compilazione
+### Build Instructions
 ```bash
-# 1. Clona il repository
+# 1. Clone repository
 git clone https://github.com/rivitti01/DSL-CycloneDX.git
 cd DSL-CycloneDX
 
-# 2. Configura CMake
+# 2. Configure CMake
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# 3. Compila libreria, CLI e test suite
+# 3. Build library, CLI, and test suite
 cmake --build build -j4
 ```
-L'eseguibile principale generato sarà `build/sbom-dsl`.
+The main generated executable is `build/sbom-dsl`.
 
 ---
 
-## Esecuzione dei Test
+## Running Tests
 
-La suite di test automatizzati copre ogni fase del compilatore:
-- `test_lexer`: scansione token, gestione commenti, stringhe con escape, errori lessicali.
-- `test_parser`: parsing ricorsivo, precedenze di Pratt per espressioni complesse, errori sintattici.
-- `test_semantic`: validazione schema catalog, type checking di comparatori e tipi disomogenei.
-- `test_lowering`: generazione accurata dei piani algebrici IR relazionali e di grafo.
-- `test_backend`: esecuzione su SBOM CycloneDX reale, reverse lookup, join relazionale, raggio d'impatto.
-- `test_e2e`: test end-to-end completi da sorgente DSL a risultato formattato.
+The automated test suite covers each phase of the compiler:
+- `test_lexer`: token scanning, comment handling, escape strings, lexical errors.
+- `test_parser`: recursive descent parsing, Pratt precedence climbing for complex expressions, syntax errors.
+- `test_semantic`: schema catalog validation, type checking for comparators and heterogeneous types.
+- `test_lowering`: accurate generation of relational and graph algebraic IR plans.
+- `test_backend`: execution on real CycloneDX SBOMs, reverse lookups, relational joins, blast radius computation.
+- `test_e2e`: comprehensive end-to-end tests from DSL source to formatted output.
 
-Per eseguire tutti i test tramite CTest:
+To run all tests via CTest:
 ```bash
 ctest --test-dir build --output-on-failure
 ```
 
 ---
 
-## Guida alla CLI
+## CLI Guide
 
 ```bash
-# Esecuzione query inline
+# Execute inline query
 ./build/sbom-dsl -c "SELECT name, version FROM components;" -b tests/fixtures/sample_cyclonedx.json
 
-# Esecuzione query da file
+# Execute query from file
 ./build/sbom-dsl examples/who_uses.dsl
 
-# Output in formato JSON
+# Output in JSON format
 ./build/sbom-dsl examples/basic_select.dsl --format json
 
-# Output in formato albero
+# Output in tree format
 ./build/sbom-dsl examples/show_tree.dsl --format tree
 ```
 
-### Modalità Explain (`--explain`)
-Ideale per la dimostrazione e revisione accademica del compilatore:
+### Explain Mode (`--explain`)
+Ideal for demonstration and academic evaluation of the compiler:
 ```bash
 ./build/sbom-dsl examples/basic_select.dsl --explain
 ```
-Visualizza a terminale:
-1. `[PHASE 1]` Token generati dal Lexer (`line:col`);
-2. `[PHASE 2]` Albero Sintattico Astratto (`AST`);
-3. `[PHASE 3]` Resoconto di Analisi Semantica e Type Checking;
-4. `[PHASE 4]` Piano algebrico Intermediate Representation (`IR`);
-5. `[PHASE 5]` Codice target generato per `sbom-utility` o motivazione del routing su Native Engine;
-6. `[EXECUTION RESULTS]` Risultato tabulare formattato.
+Displays in the terminal:
+1. `[PHASE 1]` Tokens generated by the Lexer (`line:col`);
+2. `[PHASE 2]` Abstract Syntax Tree (`AST`);
+3. `[PHASE 3]` Semantic Analysis & Type Checking report;
+4. `[PHASE 4]` Intermediate Representation (`IR`) algebraic execution plan;
+5. `[PHASE 5]` Target code generated for `sbom-utility` or rationale for routing to the Native Engine;
+6. `[EXECUTION RESULTS]` Formatted tabular output.
 
-### Sessione Interattiva (REPL)
-Avviabile senza argomenti o con `-i`:
+### Interactive Shell (REPL)
+Can be launched without arguments or with `-i`:
 ```bash
 ./build/sbom-dsl -i
 ```
@@ -195,20 +195,20 @@ Total: 3 row(s) [Backend: Native CycloneDX Engine, Time: 0.22 ms]
 
 ---
 
-## Documentazione Completa
+## Complete Documentation
 
-La cartella [`docs/`](docs/) contiene la documentazione monografica dettagliata:
-- [docs/sbom_utility_analysis.md](docs/sbom_utility_analysis.md): Studio preliminare di CycloneDX e limitazioni di `sbom-utility` (Fase 0).
-- [docs/architecture.md](docs/architecture.md): Architettura del compilatore, pipeline e complessità computazionale.
-- [docs/grammar.md](docs/grammar.md): Grammatica formale EBNF completa, token e precedenze.
-- [docs/language.md](docs/language.md): Manuale di riferimento utente con tutte le istruzioni supportate.
-- [docs/semantics.md](docs/semantics.md): Modello dei dati, catalogo CycloneDX e regole di inferenza del type system.
-- [docs/advanced-features.md](docs/advanced-features.md): Dettaglio teorico dei costrutti avanzati di sicurezza e algoritmi di lowering.
-- [docs/examples.md](docs/examples.md): Esempi di test con query, esecuzioni ed estratti `--explain`.
+The [`docs/`](docs/) directory contains detailed monographic documentation:
+- [docs/sbom_utility_analysis.md](docs/sbom_utility_analysis.md): Preliminary study of CycloneDX and `sbom-utility` limitations (Phase 0).
+- [docs/architecture.md](docs/architecture.md): Compiler architecture, pipeline, and computational complexity.
+- [docs/grammar.md](docs/grammar.md): Complete EBNF formal grammar, tokens, and operator precedence.
+- [docs/language.md](docs/language.md): User reference manual covering all supported statements.
+- [docs/semantics.md](docs/semantics.md): Data model, CycloneDX catalog, and type system inference rules.
+- [docs/advanced-features.md](docs/advanced-features.md): Theoretical details of advanced security constructs and lowering algorithms.
+- [docs/examples.md](docs/examples.md): Test cases with queries, execution examples, and `--explain` snippets.
 
 ---
 
-## Limitazioni e Sviluppi Futuri
-- **Formati supportati**: Attualmente focalizzato su CycloneDX JSON (versioni 1.2–1.6+). Estendibile in futuro al parsing di SBOM in formato XML o SPDX 3.0.
-- **Query Ottimizzatore**: Possibilità di introdurre un pass di ottimizzazione IR basato su regole (Predicate Pushdown prima del Join, Projection Pushdown).
-- **Esportazione Grafi**: Supporto all'esportazione dei risultati di `SHOW TREE` in file Graphviz DOT o immagini vettoriali SVG.
+## Limitations and Future Work
+- **Supported Formats**: Currently focused on CycloneDX JSON (versions 1.2–1.6+). Can be extended in the future to parse XML SBOMs or SPDX 3.0.
+- **Query Optimizer**: Potential introduction of a rule-based IR optimization pass (Predicate Pushdown before Joins, Projection Pushdown).
+- **Graph Export**: Support exporting `SHOW TREE` results to Graphviz DOT files or SVG vector graphics.

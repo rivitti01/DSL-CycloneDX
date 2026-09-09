@@ -1,12 +1,12 @@
-# Esempi di Utilizzo ed Esecuzione
+# Usage and Execution Examples
 
-Questo documento raccoglie esempi completi e funzionanti del **CycloneDX Query DSL**, illustrando l'invocazione da riga di comando, l'output generato e la modalità di ispezione `--explain`.
+This document collects complete, working examples of the **CycloneDX Query DSL**, illustrating command-line invocation, generated output, and the `--explain` inspection mode.
 
-Tutti gli esempi fanno riferimento alla fixture CycloneDX 1.4 inclusa in `tests/fixtures/sample_cyclonedx.json`.
+All examples refer to the CycloneDX 1.4 fixture included in `tests/fixtures/sample_cyclonedx.json`.
 
 ---
 
-## Esempio 1: Query Base con Filtro e Ordinamento
+## Example 1: Basic Query with Filtering and Sorting
 
 ### Query (`examples/basic_select.dsl`)
 ```sql
@@ -17,12 +17,12 @@ WHERE type = 'library'
 ORDER BY name ASC;
 ```
 
-### Comando di Esecuzione
+### Execution Command
 ```bash
 ./build/sbom-dsl examples/basic_select.dsl
 ```
 
-### Output Tabulare
+### Tabular Output
 ```
 +-------------+---------+------------------------------------------------------+
 | name        | version | purl                                                 |
@@ -36,7 +36,7 @@ ORDER BY name ASC;
 Total: 5 row(s) [Backend: Native CycloneDX Engine, Time: 0.22 ms]
 ```
 
-### Output in Formato JSON (`--format json`)
+### JSON Format Output (`--format json`)
 ```bash
 ./build/sbom-dsl examples/basic_select.dsl --format json
 ```
@@ -72,19 +72,19 @@ Total: 5 row(s) [Backend: Native CycloneDX Engine, Time: 0.22 ms]
 
 ---
 
-## Esempio 2: Chiusura Transitiva Inversa (`WHO USES`)
+## Example 2: Reverse Transitive Closure (`WHO USES`)
 
 ### Query (`examples/who_uses.dsl`)
 ```sql
 WHO USES "qs" TRANSITIVE IN "tests/fixtures/sample_cyclonedx.json";
 ```
 
-### Comando di Esecuzione
+### Execution Command
 ```bash
 ./build/sbom-dsl examples/who_uses.dsl
 ```
 
-### Output Tabulare
+### Tabular Output
 ```
 +-------------+---------+-------------+----------------------------+----------------------------+
 | name        | version | type        | bom-ref                    | purl                       |
@@ -98,7 +98,7 @@ Total: 3 row(s) [Backend: Native CycloneDX Engine, Time: 0.21 ms]
 
 ---
 
-## Esempio 3: Correlazione Vulnerabilità (`FIND VULNERABLE`)
+## Example 3: Vulnerability Correlation (`FIND VULNERABLE`)
 
 ### Query (`examples/find_vulnerable.dsl`)
 ```sql
@@ -107,7 +107,7 @@ SEVERITY >= HIGH
 IN "tests/fixtures/sample_cyclonedx.json";
 ```
 
-### Comando di Esecuzione
+### Execution Command
 ```bash
 ./build/sbom-dsl examples/find_vulnerable.dsl
 ```
@@ -125,19 +125,19 @@ Total: 2 row(s) [Backend: Native CycloneDX Engine, Time: 0.21 ms]
 
 ---
 
-## Esempio 4: Albero delle Dipendenze (`SHOW TREE`)
+## Example 4: Dependency Tree (`SHOW TREE`)
 
 ### Query (`examples/show_tree.dsl`)
 ```sql
 SHOW TREE OF "my-web-app" DEPTH 2 IN "tests/fixtures/sample_cyclonedx.json";
 ```
 
-### Comando con Formato Tree
+### Command with Tree Format
 ```bash
 ./build/sbom-dsl examples/show_tree.dsl --format tree
 ```
 
-### Output Gerarchico
+### Hierarchical Output
 ```
 Dependency Tree:
 └── express@4.17.1
@@ -147,19 +147,19 @@ Dependency Tree:
 
 ---
 
-## Esempio 5: Analisi del Raggio d'Impatto (`FIND BLAST RADIUS`)
+## Example 5: Blast Radius Analysis (`FIND BLAST RADIUS`)
 
 ### Query (`examples/blast_radius.dsl`)
 ```sql
 FIND BLAST RADIUS OF "CVE-2021-44228" IN "tests/fixtures/sample_cyclonedx.json";
 ```
 
-### Comando di Esecuzione
+### Execution Command
 ```bash
 ./build/sbom-dsl examples/blast_radius.dsl
 ```
 
-### Output di Sintesi della Sicurezza
+### Security Summary Output
 ```
 +----------------------------------+-----------------------+
 | Metric                           | Value                 |
@@ -178,14 +178,14 @@ Total: 8 row(s) [Backend: Native CycloneDX Engine, Time: 0.12 ms]
 
 ---
 
-## Esempio 6: Ispezione Completa del Compilatore (`--explain`)
+## Example 6: Full Compiler Inspection (`--explain`)
 
-### Comando
+### Command
 ```bash
 ./build/sbom-dsl -c "SELECT name, version FROM components WHERE type = 'library' IN 'tests/fixtures/sample_cyclonedx.json';" --explain
 ```
 
-### Output Dettagliato a Terminale
+### Detailed Terminal Output
 ```text
 =======================================================
 [PHASE 1] LEXICAL ANALYSIS (TOKENS):

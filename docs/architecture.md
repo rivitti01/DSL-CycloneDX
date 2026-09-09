@@ -1,149 +1,149 @@
-# Architettura del Compilatore CycloneDX Query DSL
+# CycloneDX Query DSL Compiler Architecture
 
-Questo documento descrive l'architettura tecnica, le scelte progettuali e la pipeline di compilazione del **CycloneDX Query DSL**, sviluppato in C++20 per il corso di **Formal Languages and Compilers** (Politecnico di Milano).
-
----
-
-## 1. Visione d'Insieme della Pipeline
-
-Il sistema è strutturato come un vero e proprio compilatore a più stadi, separando nettamente l'analisi del linguaggio dalla rappresentazione intermedia e dall'esecuzione:
-
-```
-                            [ Codice Sorgente DSL ]
-                                       |
-                                       v
-                             +-------------------+
-                             |       Lexer       |   (Scansione lessicale, Line/Col)
-                             +-------------------+
-                                       | Token Stream
-                                       v
-                             +-------------------+
-                             |      Parser       |   (Recursive Descent + Pratt Parser)
-                             +-------------------+
-                                       |
-                                       v
-                             +-------------------+
-                             |        AST        |   (Abstract Syntax Tree C++20)
-                             +-------------------+
-                                       |
-                                       v
-                             +-------------------+
-                             | Semantic Analysis |   (Type checking, Schema Catalog)
-                             +-------------------+
-                                       | AST Validato
-                                       v
-                             +-------------------+
-                             |  Query Lowering   |   (Trasformazione High-Level -> IR)
-                             +-------------------+
-                                       |
-                                       v
-                             +-------------------+
-                             |  Intermediate Rep |   (Piano Relazionale & Grafo)
-                             +-------------------+
-                                       |
-                     +-----------------+-----------------+
-                     |                                   |
-                     v                                   v
-          +---------------------+             +---------------------+
-          | sbom-utility CodeGen|             |   Native Engine C++ |
-          | - Generazione CLI   |             | - In-memory Graph   |
-          | - Offloading CLI    |             | - Hash Join / BFS   |
-          +---------------------+             +---------------------+
-                     |                                   |
-                     +-----------------+-----------------+
-                                       |
-                                       v
-                             +-------------------+
-                             | Result Formatter  |   (Table, JSON, Tree)
-                             +-------------------+
-```
+This document describes the technical architecture, design choices, and compilation pipeline of the **CycloneDX Query DSL**, developed in C++20 for the **Formal Languages and Compilers** course (Politecnico di Milano).
 
 ---
 
-## 2. Dettaglio delle Fasi del Compilatore
+## 1. Overall Pipeline Architecture
 
-### 2.1 Fase 1: Analisi Lessicale (`Lexer`)
-- **Responsabilità**: Converte lo stream di caratteri sorgente in una sequenza ordinata di token tipizzati (`Token`).
-- **Peculiarità implementative**:
-  - Tracciamento della posizione sorgente mediante `SourceLocation` (file, linea, colonna, offset assoluto).
-  - Riconoscimento case-insensitive delle parole chiave (es. `SELECT`, `Select`, `select`).
-  - Supporto per commenti a riga singola (`--`, `//`) e multiriga (`/* ... */`).
-  - Gestione avanzata delle stringhe con sequenze di escape (`\n`, `\t`, `\"`, `\'`, `\\`).
-  - Riconoscimento di identificatori composti contenenti trattini (es. `bom-ref`, `cvss-severity`).
+The system is structured as a full multi-stage compiler, cleanly separating language front-end analysis from intermediate representation and execution backends:
 
-### 2.2 Fase 2: Analisi Sintattica (`Parser`)
-- **Responsabilità**: Verifica che la sequenza di token rispetti la grammatica formale ed emette l'albero sintattico astratto (`AST`).
-- **Scelte architetturali**:
-  - **Recursive Descent** per la struttura degli enunciati: garantisce una grammatica LL(1) deterministica, modulare ed estendibile.
-  - **Pratt Parsing (Precedence Climbing)** per le espressioni nella clausola `WHERE`:
-    - Permette di gestire con estrema eleganza e prestazioni ottimali $O(N)$ le precedenze degli operatori binari (`OR` < `AND` < `NOT` < confronti < primari).
-    - Evita l'esplosione di nodi intermedi tipica delle grammatiche canoniche a molti livelli.
-  - **Error Recovery**: Meccanismo di sincronizzazione in panic-mode al raggiungimento del token `;` o dell'istruzione successiva.
+```
+                            [ DSL Source Code ]
+                                     |
+                                     v
+                           +-------------------+
+                           |       Lexer       |   (Lexical scanning, Line/Col)
+                           +-------------------+
+                                     | Token Stream
+                                     v
+                           +-------------------+
+                           |      Parser       |   (Recursive Descent + Pratt Parser)
+                           +-------------------+
+                                     |
+                                     v
+                           +-------------------+
+                           |        AST        |   (C++20 Abstract Syntax Tree)
+                           +-------------------+
+                                     |
+                                     v
+                           +-------------------+
+                           | Semantic Analysis |   (Type checking, Schema Catalog)
+                           +-------------------+
+                                     | Validated AST
+                                     v
+                           +-------------------+
+                           |  Query Lowering   |   (High-Level -> IR Transformation)
+                           +-------------------+
+                                     |
+                                     v
+                           +-------------------+
+                           | Intermediate Rep  |   (Relational & Graph Plan)
+                           +-------------------+
+                                     |
+                   +-----------------+-----------------+
+                   |                                   |
+                   v                                   v
+        +---------------------+             +---------------------+
+        | sbom-utility CodeGen|             |   Native Engine C++ |
+        | - CLI Generation    |             | - In-memory Graph   |
+        | - CLI Offloading    |             | - Hash Join / BFS   |
+        +---------------------+             +---------------------+
+                   |                                   |
+                   +-----------------+-----------------+
+                                     |
+                                     v
+                           +-------------------+
+                           | Result Formatter  |   (Table, JSON, Tree)
+                           +-------------------+
+```
 
-### 2.3 Fase 3: Abstract Syntax Tree (`AST`) e Pattern Visitor
-- **Responsabilità**: Rappresentazione formale e tipizzata della query.
-- **Gerarchia C++20**:
-  - `ASTNode` (classe base astratta con `SourceLocation`).
+---
+
+## 2. Compiler Phases Detail
+
+### 2.1 Phase 1: Lexical Analysis (`Lexer`)
+- **Responsibility**: Converts the stream of source characters into an ordered sequence of typed tokens (`Token`).
+- **Implementation highlights**:
+  - Source position tracking via `SourceLocation` (filename, line, column, absolute offset).
+  - Case-insensitive keyword recognition (e.g., `SELECT`, `Select`, `select`).
+  - Support for single-line comments (`--`, `//`) and multi-line comments (`/* ... */`).
+  - Robust escape sequence handling in string literals (`\n`, `\t`, `\"`, `\'`, `\\`).
+  - Recognition of compound hyphenated identifiers (e.g., `bom-ref`, `cvss-severity`).
+
+### 2.2 Phase 2: Syntactic Analysis (`Parser`)
+- **Responsibility**: Verifies that the token stream complies with the formal grammar and produces the Abstract Syntax Tree (`AST`).
+- **Architectural choices**:
+  - **Recursive Descent** for statement structure: ensures a deterministic, modular, and extensible LL(1) grammar.
+  - **Pratt Parsing (Precedence Climbing)** for expressions in the `WHERE` clause:
+    - Handles binary operator precedence (`OR` < `AND` < `NOT` < comparisons < primaries) with optimal $O(N)$ efficiency.
+    - Avoids the exponential explosion of intermediate AST nodes typical of multi-level canonical grammars.
+  - **Error Recovery**: Panic-mode synchronization mechanism recovering upon encountering a semicolon `;` or the start of the next statement.
+
+### 2.3 Phase 3: Abstract Syntax Tree (`AST`) and Visitor Pattern
+- **Responsibility**: Formal, strongly typed representation of the query.
+- **C++20 Class Hierarchy**:
+  - `ASTNode` (abstract base class with `SourceLocation`).
   - `StatementNode`: `SelectStatement`, `WhoUsesStatement`, `FindVulnerableStatement`, `ShowTreeStatement`, `BlastRadiusStatement`.
   - `ExpressionNode`: `BinaryOpExpr`, `UnaryOpExpr`, `ColumnRefExpr`, `LiteralExpr`.
-- **Pattern Visitor (`ASTVisitor`)**:
-  - Disaccoppia la struttura dati dell'albero dalle operazioni su di esso.
-  - Utilizzato da `ASTPrinter`, `TypeChecker` e `QueryLowerer`.
+- **Visitor Pattern (`ASTVisitor`)**:
+  - Decouples tree data structures from traversal operations.
+  - Used by `ASTPrinter`, `TypeChecker`, and `QueryLowerer`.
 
-### 2.4 Fase 4: Analisi Semantica e Type Checking (`Semantic Analysis`)
-- **Responsabilità**: Verifica la correttezza semantica prima della compilazione in IR:
-  - **Schema Catalog**: Verifica che le collezioni e i campi appartengano allo standard CycloneDX (`components`, `vulnerabilities`, `dependencies`, `metadata.component`).
-  - **Type Checking**: Verifica la compatibilità di tipo negli operatori relazionali e logici (es. blocca confronti tra stringhe e interi con operatori d'ordine).
-  - **Validazione vincoli**: Assicura che parametri come `LIMIT` e `DEPTH` siano numeri interi positivi, e che i livelli di severità appartengano al dominio CVSS (`CRITICAL`, `HIGH`, ecc.).
+### 2.4 Phase 4: Semantic Analysis and Type Checking (`Semantic Analysis`)
+- **Responsibility**: Ensures semantic validity prior to IR compilation:
+  - **Schema Catalog**: Verifies that collections and fields conform to the CycloneDX standard (`components`, `vulnerabilities`, `dependencies`, `metadata.component`).
+  - **Type Checking**: Checks type compatibility across relational and logical operators (e.g., prevents comparisons between strings and integers using order operators).
+  - **Constraint Validation**: Enforces that parameters such as `LIMIT` and `DEPTH` are positive integers, and that severity levels belong to the standard CVSS domain (`CRITICAL`, `HIGH`, etc.).
 
-### 2.5 Fase 5: Intermediate Representation (IR) e Query Lowering
-- **Responsabilità**: Il cuore teorico del compilatore. Traduce (abbassa) costrutti ad alto livello di astrazione semantica in un piano di esecuzione algebrico composto da primitive relazionali e di grafo:
-  - `IRScan`: Scansione della collezione SBOM.
-  - `IRFilter`: Filtro predicativo su tuple.
-  - `IRProject`: Proiezione e ridenominazione attributi.
-  - `IRSort` e `IRLimit`: Ordinamento e troncamento.
-  - `IRHashJoin`: Join equi-relazionale (es. `affects == bom-ref`).
-  - `IRGraphTraverse`: Chiusura transitiva diretta/inversa sul grafo delle dipendenze.
-  - `IRBlastRadius`: Calcolo metriche di impatto e raggiungibilità sistemica.
+### 2.5 Phase 5: Intermediate Representation (IR) and Query Lowering
+- **Responsibility**: Theoretical core of the compiler. Lowers high-level domain constructs into an algebraic execution plan composed of relational and graph primitives:
+  - `IRScan`: Scans an SBOM collection.
+  - `IRFilter`: Predicate filtering on tuples.
+  - `IRProject`: Attribute projection and renaming.
+  - `IRSort` and `IRLimit`: Tuple ordering and truncation.
+  - `IRHashJoin`: Relational equi-join (e.g., `affects == bom-ref`).
+  - `IRGraphTraverse`: Direct/reverse transitive closure over the dependency graph.
+  - `IRBlastRadius`: Computation of blast radius metrics and reachability.
 
-### 2.6 Fase 6: Dual Backend Esecutivo
-Per conciliare le indicazioni del docente e superare le limitazioni intrinseche del tool ufficiale `sbom-utility`:
+### 2.6 Phase 6: Dual Execution Backend
+To balance instructor guidance with overcoming the intrinsic limitations of the official `sbom-utility` tool:
 1. **`SbomUtilityCodeGen`**:
-   - Analizza il piano IR. Se la query è compatibile con le primitive di `sbom-utility` (scansione + filtro semplice per uguaglianze), sintetizza il comando CLI shell corrispondente:
+   - Inspects the IR plan. If the query is compatible with `sbom-utility` primitives (scan + simple equality filtering), synthesizes the corresponding shell CLI command:
      `sbom-utility query --input-file bom.json --from components --select name,version --where "type=library"`
-   - Se richiesto, esegue il processo via pipe POSIX e acquisisce il JSON di output.
+   - If requested, spawns the process via POSIX pipes and parses the JSON output.
 2. **`NativeEngine` (In-Memory CycloneDX Engine in C++20)**:
-   - Motore nativo a zero dipendenze esterne di runtime.
-   - Carica il JSON CycloneDX e costruisce strutture dati indicizzate:
-     - Tabella hash `bom-ref -> Component` $O(1)$.
-     - Indice inverso `name -> bom-ref` $O(1)$.
-     - Grafo diretto delle adiacenze $A \rightarrow B$.
-     - Grafo inverso delle adiacenze $B \rightarrow A$ (fondamentale per `WHO USES`).
-   - Esegue algoritmi di grafo (BFS/DFS per chiusura transitiva con complessità $O(V + E)$).
-   - Esegue hash join in memoria in $O(L + R)$.
+   - Native engine with zero external runtime dependencies.
+   - Parses the CycloneDX JSON and constructs in-memory indexed data structures:
+     - Hash table `bom-ref -> Component` in $O(1)$.
+     - Inverted index `name -> bom-ref` in $O(1)$.
+     - Forward adjacency graph $A \rightarrow B$.
+     - Reverse adjacency graph $B \rightarrow A$ (critical for `WHO USES`).
+   - Executes graph algorithms (BFS/DFS for transitive closure in $O(V + E)$ complexity).
+   - Performs in-memory hash joins in $O(L + R)$ complexity.
 
 ---
 
-## 3. Complessità Computazionale
+## 3. Computational Complexity
 
-| Operazione | Algoritmo | Complessità Temporale | Complessità Spaziale |
+| Operation | Algorithm | Time Complexity | Auxiliary Space Complexity |
 | :--- | :--- | :--- | :--- |
-| **Lexing** | Scansione lineare a singolo passaggio | $O(N)$ caratteri | $O(T)$ token |
-| **Parsing** | Recursive Descent + Pratt Parser | $O(T)$ token | $O(T)$ nodi AST |
-| **Type Checking** | Visitor traversal | $O(A)$ nodi AST | $O(1)$ ausiliario |
-| **Lowering** | Generazione piano IR | $O(A)$ nodi AST | $O(K)$ nodi IR |
-| **Indicizzazione SBOM** | Caricamento JSON + hash indexing | $O(C + D + V)$ | $O(C + D + V)$ |
-| **Query Base (Filter/Project)**| Scansione sequenziale | $O(C)$ | $O(R)$ risultati |
-| **Reverse Lookup (`WHO USES`)**| BFS su grafo inverso `reverse_graph` | $O(V + E)$ | $O(V)$ visited set |
-| **Relational Join (`FIND VULN`)**| Hash Join su `affects <-> bom-ref` | $O(V_{uln} + C_{omp})$ | $O(C_{omp})$ hash table |
-| **Blast Radius** | BFS inversa + calcolo percentuale | $O(V + E)$ | $O(V)$ |
+| **Lexing** | Single-pass linear scan | $O(N)$ characters | $O(T)$ tokens |
+| **Parsing** | Recursive Descent + Pratt Parser | $O(T)$ tokens | $O(T)$ AST nodes |
+| **Type Checking** | Visitor traversal | $O(A)$ AST nodes | $O(1)$ auxiliary |
+| **Lowering** | IR plan generation | $O(A)$ AST nodes | $O(K)$ IR nodes |
+| **SBOM Indexing** | JSON loading + hash indexing | $O(C + D + V)$ | $O(C + D + V)$ |
+| **Basic Query (Filter/Project)**| Sequential scan | $O(C)$ | $O(R)$ results |
+| **Reverse Lookup (`WHO USES`)**| BFS on reverse graph (`reverse_graph`) | $O(V + E)$ | $O(V)$ visited set |
+| **Relational Join (`FIND VULN`)**| Hash Join on `affects <-> bom-ref` | $O(V_{uln} + C_{omp})$ | $O(C_{omp})$ hash table |
+| **Blast Radius** | Reverse BFS + impact percentage | $O(V + E)$ | $O(V)$ |
 
 ---
 
-## 4. Modalità di Ispezione Interna (`--explain`)
-Il compilatore include una modalità `--explain` che stampa l'esito di ogni singola fase del processo di compilazione:
-1. Stream di token con posizioni;
-2. Albero AST pretty-printed;
-3. Resoconto della validazione semantica;
-4. Albero del piano di esecuzione IR;
-5. Comando `sbom-utility` generato o motivazione tecnica del fallback sul motore nativo.
+## 4. Internal Inspection Mode (`--explain`)
+The compiler features an `--explain` mode that displays the output of each individual compilation phase:
+1. Token stream with source coordinates;
+2. Pretty-printed AST tree;
+3. Semantic validation report;
+4. Algebraic IR execution plan tree;
+5. Generated `sbom-utility` command or technical rationale for fallback to the native engine.

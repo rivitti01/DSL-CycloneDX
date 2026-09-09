@@ -1,32 +1,32 @@
-# Funzionalità Avanzate di Sicurezza e Query Lowering (30L)
+# Advanced Security Features and Query Lowering (30L)
 
-Questo documento illustra nel dettaglio le **funzionalità avanzate di sicurezza** introdotte nel CycloneDX Query DSL per soddisfare l'obiettivo del corso **Formal Languages and Compilers** (Politecnico di Milano), dimostrando un processo di compilazione completo attraverso il **Query Lowering** verso un'Intermediate Representation (IR) relazionale e di grafo.
-
----
-
-## 1. Perché queste funzionalità?
-
-In un'analisi di sicurezza software (Software Supply Chain Security), le sole query tabulari non bastano:
-1. **Le dipendenze formano un grafo orientato**: Una libreria vulnerabile non viene quasi mai importata direttamente dal codice sorgente dell'utente, ma viene trascinata dentro da librerie intermedie (dipendenze transitive).
-2. **I dati sono distribuiti su più domini**: CycloneDX separa l'inventario dei componenti (`components`), le relazioni di dipendenza (`dependencies`) e gli advisory di sicurezza (`vulnerabilities`).
-3. **`sbom-utility` non supporta né join relazionali né analisi di grafi**: Il nostro DSL eleva il livello di astrazione, consentendo all'utente di esprimere query di sicurezza ad alto livello che il compilatore abbassa in piani di esecuzione formali.
+This document details the **advanced security features** introduced in the CycloneDX Query DSL to fulfill the objectives of the **Formal Languages and Compilers** course (Politecnico di Milano), demonstrating a complete compilation process via **Query Lowering** to relational and graph Intermediate Representation (IR).
 
 ---
 
-## 2. Dettaglio dei 5 Costrutti Avanzati
+## 1. Why These Features?
+
+In Software Supply Chain Security analysis, basic tabular queries are insufficient:
+1. **Dependencies form a directed graph**: A vulnerable library is rarely imported directly by user application source code; instead, it is pulled in transitively through intermediate libraries.
+2. **Data is distributed across multiple domains**: CycloneDX separates component inventory (`components`), dependency relationships (`dependencies`), and security advisories (`vulnerabilities`).
+3. **`sbom-utility` supports neither relational joins nor graph analysis**: Our DSL raises the level of abstraction, enabling users to express high-level security queries that the compiler lowers into formal execution plans.
 
 ---
 
-### Costrutto 1: `WHO USES "<component>" [TRANSITIVE | DIRECT];`
+## 2. Detail of the 5 Advanced Constructs
 
-#### Problema Risolto
-Quando viene scoperta una vulnerabilità critica zero-day in una libreria (es. `log4j-core` o `qs`), l'analista deve rispondere istantaneamente: *"Quali moduli e quale applicazione stanno usando questa libreria?"*.
+---
 
-#### Sintassi e Semantica
-- Sintassi: `WHO USES "<component-name-or-purl>" [TRANSITIVE | DIRECT] [IN "<file.json>"];`
-- Semantica: Trova tutti i nodi antenati nel grafo delle dipendenze che hanno un cammino orientato verso il componente bersaglio.
+### Construct 1: `WHO USES "<component>" [TRANSITIVE | DIRECT];`
 
-#### Rappresentazione AST
+#### Problem Solved
+When a critical zero-day vulnerability is discovered in a library (e.g., `log4j-core` or `qs`), an analyst needs an immediate answer to: *"Which modules and which applications are using this library?"*.
+
+#### Syntax and Semantics
+- Syntax: `WHO USES "<component-name-or-purl>" [TRANSITIVE | DIRECT] [IN "<file.json>"];`
+- Semantics: Identifies all ancestor nodes in the dependency graph with a directed path reaching the target component.
+
+#### AST Representation
 ```cpp
 class WhoUsesStatement : public StatementNode {
     std::string target_component;
@@ -35,8 +35,8 @@ class WhoUsesStatement : public StatementNode {
 };
 ```
 
-#### Abbassamento (Lowering) in IR
-Il Lowerer trasforma il nodo AST in un piano composto da scansione, attraversamento del grafo inverso e hash join:
+#### IR Lowering
+The Lowerer transforms the AST node into a plan comprising a scan, reverse graph traversal, and hash join:
 ```
 Project(columns=[name, version, type, bom-ref, purl])
   └── HashJoin(on left.ref == right.bom-ref)
@@ -47,7 +47,7 @@ Project(columns=[name, version, type, bom-ref, purl])
               Scan(collection="components")
 ```
 
-#### Esempio e Risultato
+#### Example and Output
 ```sql
 WHO USES "qs" TRANSITIVE IN "tests/fixtures/sample_cyclonedx.json";
 ```
@@ -65,16 +65,16 @@ Total: 3 row(s) [Backend: Native CycloneDX Engine]
 
 ---
 
-### Costrutto 2: `FIND VULNERABLE LIBRARIES [SEVERITY >= <level>];`
+### Construct 2: `FIND VULNERABLE LIBRARIES [SEVERITY >= <level>];`
 
-#### Problema Risolto
-`sbom-utility` elenca le vulnerabilità o i componenti in modo disgiunto. `FIND VULNERABLE` esegue un join tra il catalogo delle vulnerabilità e i metadati dei componenti software, permettendo di filtrare per severità minima e tipo di componente.
+#### Problem Solved
+`sbom-utility` lists vulnerabilities or components in isolation. `FIND VULNERABLE` executes a relational join between the vulnerability catalog and software component metadata, allowing filtering by minimum severity and component type.
 
-#### Sintassi e Semantica
-- Sintassi: `FIND VULNERABLE (COMPONENTS | LIBRARIES) [SEVERITY [op] <level>] [WHERE <cond>];`
-- Semantica: Esegue l'equi-join relazionale tra `vulnerabilities[].affects[].ref` e `components[].bom-ref`.
+#### Syntax and Semantics
+- Syntax: `FIND VULNERABLE (COMPONENTS | LIBRARIES) [SEVERITY [op] <level>] [WHERE <cond>];`
+- Semantics: Executes a relational equi-join between `vulnerabilities[].affects[].ref` and `components[].bom-ref`.
 
-#### Rappresentazione AST
+#### AST Representation
 ```cpp
 class FindVulnerableStatement : public StatementNode {
     bool libraries_only{false};
@@ -85,7 +85,7 @@ class FindVulnerableStatement : public StatementNode {
 };
 ```
 
-#### Abbassamento (Lowering) in IR
+#### IR Lowering
 ```
 Project(columns=[name, version, type, vuln_id, severity, score, description])
   └── HashJoin(on left.affects == right.bom-ref)
@@ -97,7 +97,7 @@ Project(columns=[name, version, type, vuln_id, severity, score, description])
                 └── Scan(collection="components")
 ```
 
-#### Esempio e Risultato
+#### Example and Output
 ```sql
 FIND VULNERABLE LIBRARIES SEVERITY >= HIGH IN "tests/fixtures/sample_cyclonedx.json";
 ```
@@ -114,16 +114,16 @@ Total: 2 row(s) [Backend: Native CycloneDX Engine]
 
 ---
 
-### Costrutto 3: `SHOW TREE [OF "<root>"] [DEPTH <n>];`
+### Construct 3: `SHOW TREE [OF "<root>"] [DEPTH <n>];`
 
-#### Problema Risolto
-Permette di visualizzare visivamente la struttura dell'albero delle dipendenze per comprendere attraverso quali percorsi sono introdotte le librerie.
+#### Problem Solved
+Provides a visual representation of the dependency tree structure to understand the exact paths through which libraries are pulled in.
 
-#### Sintassi e Semantica
-- Sintassi: `SHOW (TREE | DEPENDENCIES) [OF "<component>"] [DEPTH <n>] [IN "<file.json>"];`
-- Semantica: Esegue una BFS/DFS in direzione uscente (`FORWARD`) a partire dal nodo specificato fino alla profondità massima richiesta.
+#### Syntax and Semantics
+- Syntax: `SHOW (TREE | DEPENDENCIES) [OF "<component>"] [DEPTH <n>] [IN "<file.json>"];`
+- Semantics: Executes a BFS/DFS in the outgoing (`FORWARD`) direction starting from the specified root node up to the requested maximum depth.
 
-#### Abbassamento (Lowering) in IR
+#### IR Lowering
 ```
 Project(columns=[name, version, depth, bom-ref])
   └── HashJoin(on left.ref == right.bom-ref)
@@ -134,7 +134,7 @@ Project(columns=[name, version, depth, bom-ref])
               Scan(collection="components")
 ```
 
-#### Esempio con Output Formattato ad Albero (`--format tree`)
+#### Example with Hierarchical Tree Output (`--format tree`)
 ```sql
 SHOW TREE OF "my-web-app" DEPTH 2;
 ```
@@ -148,22 +148,22 @@ Dependency Tree:
 
 ---
 
-### Costrutto 4: `FIND BLAST RADIUS OF "<cve-id>";`
+### Construct 4: `FIND BLAST RADIUS OF "<cve-id>";`
 
-#### Problema Risolto
-Valuta l'impatto complessivo di una CVE sul sistema: calcola la frazione dell'intera base software compromessa e determina se l'applicazione primaria (`metadata.component`) o i servizi esterni sono raggiungibili e quindi esposti all'attacco.
+#### Problem Solved
+Evaluates the global impact of a CVE across the system: computes what fraction of the entire software base is compromised and determines whether the primary root application (`metadata.component`) or external services are reachable and exposed.
 
-#### Sintassi e Semantica
-- Sintassi: `FIND BLAST RADIUS OF "<cve-id>" [IN "<file.json>"];`
-- Semantica: Identifica i componenti bersaglio della vulnerabilità, esegue una chiusura transitiva inversa (`reverse reachability`), calcola la cardinalità dei nodi impattati e verifica l'intersezione con il nodo radice dell'applicazione.
+#### Syntax and Semantics
+- Syntax: `FIND BLAST RADIUS OF "<cve-id>" [IN "<file.json>"];`
+- Semantics: Identifies components affected by the vulnerability, computes reverse reachability (transitive closure in reverse), calculates impacted node cardinality, and verifies intersection with the root application node.
 
-#### Abbassamento (Lowering) in IR
+#### IR Lowering
 ```
 BlastRadius(vulnerability_id="CVE-2021-44228")
   └── Scan(collection="vulnerabilities")
 ```
 
-#### Esempio e Risultato
+#### Example and Output
 ```sql
 FIND BLAST RADIUS OF "CVE-2021-44228" IN "tests/fixtures/sample_cyclonedx.json";
 ```
@@ -185,14 +185,14 @@ Output:
 
 ---
 
-### Costrutto 5: Compilatore con Modalità `--explain` e Generazione di Comandi `sbom-utility`
+### Construct 5: Multi-Stage Compiler with `--explain` Mode and `sbom-utility` Code Generation
 
-#### Valore Accademico
-Durante la discussione del progetto, è essenziale dimostrare alla commissione che il sistema è un **vero compilatore con analisi multi-stadio** e non un semplice script.
+#### Academic Value
+During project presentation, it is essential to demonstrate that the system is a **genuine multi-stage compiler** rather than a simple script.
 
-La modalità `--explain` isola e visualizza:
-1. **Fase Lessicale**: Elenco formale dei token con coordinate posizionali (`line:column`);
-2. **Fase Sintattica**: Struttura gerarchica dell'albero AST;
-3. **Fase Semantica**: Esito della validazione rispetto allo schema catalog CycloneDX;
-4. **Fase di Lowering**: Piano di esecuzione IR con operatori relazionali e grafi;
-5. **Fase di Code Generation**: Traduzione automatica nel comando CLI `sbom-utility query ...` per le query supportate, oppure spiegazione analitica del motivo per cui la query richiede il motore nativo in memoria (presenza di join relazionali o grafi).
+The `--explain` flag isolates and renders:
+1. **Lexical Phase**: Formal token listing with positional coordinates (`line:column`);
+2. **Syntactic Phase**: Hierarchical AST structure;
+3. **Semantic Phase**: Validation outcome against the CycloneDX schema catalog;
+4. **Lowering Phase**: Relational and graph IR execution plan;
+5. **Code Generation Phase**: Automatic translation into the `sbom-utility query ...` CLI command for supported queries, or analytical explanation of why the query requires the native in-memory engine (due to relational joins or graph traversals).
