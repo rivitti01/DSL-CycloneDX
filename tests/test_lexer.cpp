@@ -143,3 +143,29 @@ TEST_CASE("Lexer: Lexical errors") {
         CHECK(diag.error_count() == 1);
     }
 }
+
+TEST_CASE("Lexer: Pattern matching keywords (LIKE, CONTAINS, MATCHES)") {
+    DiagnosticEngine diag;
+    std::string source = "LIKE like Like CONTAINS contains Contains MATCHES matches Matches";
+    Lexer lexer(source, "test.dsl", diag);
+    auto tokens = lexer.tokenize();
+
+    CHECK_FALSE(diag.has_errors());
+    REQUIRE(tokens.size() == 10); // 9 keywords + EOF
+
+    CHECK(tokens[0].type == TokenType::KwLike);
+    CHECK(tokens[1].type == TokenType::KwLike);
+    CHECK(tokens[2].type == TokenType::KwLike);
+    CHECK(tokens[3].type == TokenType::KwContains);
+    CHECK(tokens[4].type == TokenType::KwContains);
+    CHECK(tokens[5].type == TokenType::KwContains);
+    CHECK(tokens[6].type == TokenType::KwMatches);
+    CHECK(tokens[7].type == TokenType::KwMatches);
+    CHECK(tokens[8].type == TokenType::KwMatches);
+    CHECK(tokens[9].type == TokenType::EndOfFile);
+
+    for (size_t i = 0; i < 9; ++i) {
+        CHECK(tokens[i].is_comparison_op());
+        CHECK(tokens[i].is_keyword());
+    }
+}

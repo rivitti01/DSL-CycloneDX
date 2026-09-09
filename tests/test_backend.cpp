@@ -138,6 +138,81 @@ TEST_CASE("Backend: sbom-utility CodeGen") {
         CHECK_FALSE(SbomUtilityCodeGen::can_offload(plan, &reason));
         CHECK_FALSE(reason.empty());
     }
+
+    SUBCASE("Non-mappable query (LIKE operator)") {
+        Lexer lex("SELECT name FROM components WHERE name LIKE 'log%';", "test.dsl", diag);
+        Parser parser(lex.tokenize(), diag);
+        auto prog = parser.parse_program();
+        auto plan = lowerer.lower(*prog->statements[0]);
+
+        std::string reason;
+        CHECK_FALSE(SbomUtilityCodeGen::can_offload(plan, &reason));
+        CHECK(reason.find("LIKE") != std::string::npos);
+    }
+}
+
+TEST_CASE("Backend: Pattern Matching (LIKE, CONTAINS, MATCHES)") {
+    SUBCASE("LIKE with prefix wildcard 'log%'") {
+        auto res = run_query("SELECT name FROM components WHERE name LIKE 'log%';");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "log4j-core");
+    }
+
+    SUBCASE("LIKE with suffix wildcard '%parser'") {
+        auto res = run_query("SELECT name FROM components WHERE name LIKE '%parser';");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "body-parser");
+    }
+
+    SUBCASE("LIKE with single character wildcard 'lo_ash'") {
+        auto res = run_query("SELECT name FROM components WHERE name LIKE 'lo_ash';");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "lodash");
+    }
+
+    SUBCASE("LIKE exact match without wildcards") {
+        auto res = run_query("SELECT name FROM components WHERE name LIKE 'express';");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "express");
+    }
+
+    SUBCASE("CONTAINS substring matching (case-insensitive)") {
+        // 'maven' in purl -> log4j-core
+        auto res_maven = run_query("SELECT name FROM components WHERE purl CONTAINS 'maven';");
+        REQUIRE(res_maven.rows.size() == 1);
+        CHECK(res_maven.rows[0][0] == "log4j-core");
+
+        // 'NPM' (uppercase) in purl -> express, body-parser, qs, lodash (4 libraries)
+        auto res_npm = run_query("SELECT name FROM components WHERE purl CONTAINS 'NPM';");
+        CHECK(res_npm.rows.size() == 4);
+    }
+
+    SUBCASE("MATCHES regular expression") {
+        auto res = run_query("SELECT id FROM vulnerabilities WHERE description MATCHES 'JNDI.*LDAP';");
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.rows.size() == 1);
+        CHECK(res.rows[0][0] == "CVE-2021-44228");
+    }
+
+    SUBCASE("LIKE with package url prefix 'pkg:npm%'") {
+        auto res = run_query("SELECT name FROM components WHERE purl LIKE 'pkg:npm%';");
+        CHECK_FALSE(res.is_empty());
+        CHECK(res.rows.size() == 4); // express, body-parser, qs, lodash
+    }
+
+    SUBCASE("Reversed operands: literal on LHS, column on RHS") {
+        auto res_eq = run_query("SELECT name FROM components WHERE 'express' = name;");
+        REQUIRE(res_eq.rows.size() == 1);
+        CHECK(res_eq.rows[0][0] == "express");
+
+        auto res_num = run_query("SELECT id FROM vulnerabilities WHERE 8.0 <= score;");
+        REQUIRE(res_num.rows.size() == 1);
+        CHECK(res_num.rows[0][0] == "CVE-2021-44228");
+    }
 }
 
 TEST_CASE("Backend: Result Formatter") {

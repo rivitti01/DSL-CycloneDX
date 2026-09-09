@@ -51,8 +51,9 @@ Supports comprehensive logical and relational expressions:
 - **Numerical comparisons / ordering**: `<`, `<=`, `>`, `>=`
 - **Logical operators**: `AND`, `OR`, `NOT`, with parentheses `( ... )`
 - **String operators**:
-  - `CONTAINS`: checks if a string contains a substring (e.g., `name CONTAINS 'log4j'`).
-  - `MATCHES` or `LIKE`: regex pattern matching (e.g., `version MATCHES '^2\..*'`).
+  - `LIKE`: SQL-style wildcard pattern matching using `%` (matches zero or more characters) and `_` (matches a single character). Case-insensitive (e.g., `name LIKE 'log%'` or `name LIKE '%parser'`).
+  - `CONTAINS`: case-insensitive substring search (e.g., `purl CONTAINS 'npm'` or `name CONTAINS 'log4j'`).
+  - `MATCHES`: regular expression matching (e.g., `description MATCHES 'JNDI.*LDAP'`).
 
 ### 2.5 Examples
 ```sql
@@ -62,6 +63,11 @@ FROM components
 WHERE type = 'library'
 ORDER BY name ASC
 LIMIT 10;
+
+-- Pattern matching on library names and purl
+SELECT name, version
+FROM components
+WHERE name LIKE 'exp%' AND purl CONTAINS 'npm';
 
 -- Vulnerabilities with high CVSS score
 SELECT id, cvss-severity, score

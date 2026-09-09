@@ -77,12 +77,12 @@ For more details, consult [docs/architecture.md](docs/architecture.md).
 ## Language Features
 
 ### 1. Basic SQL-like Queries
-Allows projecting and filtering components, vulnerabilities, and dependencies:
+Allows projecting and filtering components, vulnerabilities, and dependencies using comparison and string pattern matching operators (`=`, `!=`, `<`, `>`, `LIKE`, `CONTAINS`):
 ```sql
 SELECT name, version, purl
 FROM components
 IN "bom.json"
-WHERE type = 'library' AND (name = 'express' OR name = 'lodash')
+WHERE type = 'library' AND (name LIKE 'exp%' OR purl CONTAINS 'lodash')
 ORDER BY name ASC
 LIMIT 10;
 ```

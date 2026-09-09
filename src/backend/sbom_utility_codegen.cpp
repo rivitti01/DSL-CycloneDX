@@ -63,7 +63,7 @@ bool SbomUtilityCodeGen::can_offload(const IRPlan& plan, std::string* reason) {
         const auto* filter_node = static_cast<const IRFilter*>(curr);
         std::vector<std::pair<std::string, std::string>> filters;
         if (!extract_where_filters(filter_node->predicate.get(), filters)) {
-            if (reason) *reason = "WHERE clause contains complex operators (OR, NOT, <, >, etc.) not supported by sbom-utility";
+            if (reason) *reason = "WHERE clause contains complex operators (OR, NOT, LIKE, CONTAINS, <, >, etc.) not supported by sbom-utility";
             return false;
         }
         curr = filter_node->child.get();

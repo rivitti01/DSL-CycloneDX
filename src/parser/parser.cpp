@@ -82,7 +82,6 @@ int Parser::get_infix_precedence(TokenType type) const {
         case TokenType::KwContains:
         case TokenType::KwMatches:
         case TokenType::KwLike:
-            return PrecContains;
         case TokenType::Equal:
         case TokenType::NotEqual:
         case TokenType::Less:

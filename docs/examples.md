@@ -254,3 +254,45 @@ IR Execution Plan:
 +-------------+---------+
 Total: 5 row(s) [Backend: Native CycloneDX Engine, Time: 0.36 ms]
 ```
+
+---
+
+## Example 7: String Pattern Matching (`LIKE` and `CONTAINS`)
+
+### Query
+```sql
+SELECT name, version, purl
+FROM components
+IN "tests/fixtures/sample_cyclonedx.json"
+WHERE name LIKE 'log%' AND purl CONTAINS 'maven';
+```
+
+### Execution Command
+```bash
+./build/sbom-dsl -c "SELECT name, version, purl FROM components WHERE name LIKE 'log%' AND purl CONTAINS 'maven' IN 'tests/fixtures/sample_cyclonedx.json';"
+```
+
+### Tabular Output
+```text
++------------+---------+------------------------------------------------------+
+| name       | version | purl                                                 |
++============+=========+======================================================+
+| log4j-core | 2.14.1  | pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1 |
++------------+---------+------------------------------------------------------+
+Total: 1 row(s) [Backend: Native CycloneDX Engine, Time: 0.22 ms]
+```
+
+### Complex Boolean Pattern Query
+```bash
+./build/sbom-dsl -c "SELECT name, version FROM components WHERE (name LIKE 'exp%' OR name LIKE '%parser') AND purl CONTAINS 'npm' ORDER BY name ASC;" -b tests/fixtures/sample_cyclonedx.json
+```
+```text
++-------------+---------+
+| name        | version |
++=============+=========+
+| body-parser | 1.19.0  |
+| express     | 4.17.1  |
++-------------+---------+
+Total: 2 row(s) [Backend: Native CycloneDX Engine, Time: 0.15 ms]
+```
+

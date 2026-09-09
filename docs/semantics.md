@@ -62,8 +62,9 @@ The DSL implements a static yet flexible type system to validate expressions and
 | `<`, `<=`, `>`, `>=` | `String` | `Numeric` | **Semantic Error** | Type mismatch |
 | `AND`, `OR` | `Boolean` | `Boolean` | **Valid** | Logical connectives |
 | `AND`, `OR` | `String` | `Boolean` | **Semantic Error** | Non-boolean left operand |
-| `CONTAINS` | `String` | `String` | **Valid** | Substring check (case-sensitive or insensitive) |
-| `MATCHES`, `LIKE` | `String` | `String` (Regex) | **Valid** | ECMAScript/POSIX regex matching |
+| `CONTAINS` | `String` | `String` | **Valid** | Case-insensitive substring check |
+| `LIKE` | `String` | `String` (Pattern) | **Valid** | SQL-style wildcard pattern matching (`%` for 0+ chars, `_` for single char) |
+| `MATCHES` | `String` | `String` (Regex) | **Valid** | Regular expression matching |
 
 ---
 

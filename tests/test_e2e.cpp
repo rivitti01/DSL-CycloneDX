@@ -84,4 +84,15 @@ TEST_CASE("End-to-End: Full Compiler Pipeline") {
         CHECK(res_blast.blast_radius->transitively_affected_components == 2); // log4j-core + my-web-app
         CHECK(res_blast.blast_radius->root_application_affected == true);
     }
+
+    SUBCASE("Pattern matching with LIKE and CONTAINS") {
+        std::string q = "SELECT name, version FROM components WHERE (name LIKE 'log%' OR name LIKE 'exp%') AND purl CONTAINS 'pkg:' ORDER BY name ASC;";
+        auto res = run_e2e(q);
+        CHECK_FALSE(res.is_empty());
+        REQUIRE(res.rows.size() == 2);
+        CHECK(res.rows[0][0] == "express");
+        CHECK(res.rows[0][1] == "4.17.1");
+        CHECK(res.rows[1][0] == "log4j-core");
+        CHECK(res.rows[1][1] == "2.14.1");
+    }
 }

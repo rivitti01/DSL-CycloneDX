@@ -164,3 +164,45 @@ TEST_CASE("Parser: Syntax errors") {
         CHECK(diag.has_errors());
     }
 }
+
+TEST_CASE("Parser: Pattern matching expressions (LIKE, CONTAINS, MATCHES)") {
+    DiagnosticEngine diag;
+    std::string q = "SELECT name FROM components WHERE name LIKE 'express%' AND (purl CONTAINS 'npm' OR description MATCHES '^Fast');";
+    auto prog = parse(q, diag);
+    CHECK_FALSE(diag.has_errors());
+    REQUIRE(prog != nullptr);
+    REQUIRE(prog->statements.size() == 1);
+
+    auto* select = dynamic_cast<SelectStatement*>(prog->statements[0].get());
+    REQUIRE(select != nullptr);
+    REQUIRE(select->where_clause != nullptr);
+
+    // Root should be AND
+    auto* root_and = dynamic_cast<BinaryOpExpr*>(select->where_clause.get());
+    REQUIRE(root_and != nullptr);
+    CHECK(root_and->op == BinaryOperator::And);
+
+    // Left is name LIKE 'express%'
+    auto* left_like = dynamic_cast<BinaryOpExpr*>(root_and->left.get());
+    REQUIRE(left_like != nullptr);
+    CHECK(left_like->op == BinaryOperator::Like);
+    auto* left_col = dynamic_cast<ColumnRefExpr*>(left_like->left.get());
+    REQUIRE(left_col != nullptr);
+    CHECK(left_col->full_path() == "name");
+    auto* left_lit = dynamic_cast<LiteralExpr*>(left_like->right.get());
+    REQUIRE(left_lit != nullptr);
+    CHECK(std::get<std::string>(left_lit->value) == "express%");
+
+    // Right is (purl CONTAINS 'npm' OR description MATCHES '^Fast')
+    auto* right_or = dynamic_cast<BinaryOpExpr*>(root_and->right.get());
+    REQUIRE(right_or != nullptr);
+    CHECK(right_or->op == BinaryOperator::Or);
+
+    auto* purl_contains = dynamic_cast<BinaryOpExpr*>(right_or->left.get());
+    REQUIRE(purl_contains != nullptr);
+    CHECK(purl_contains->op == BinaryOperator::Contains);
+
+    auto* desc_matches = dynamic_cast<BinaryOpExpr*>(right_or->right.get());
+    REQUIRE(desc_matches != nullptr);
+    CHECK(desc_matches->op == BinaryOperator::Matches);
+}

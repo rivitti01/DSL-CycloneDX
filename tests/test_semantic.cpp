@@ -78,4 +78,31 @@ TEST_CASE("Semantic Analysis: Semantic Errors") {
         CHECK_FALSE(ok);
         CHECK(diag.has_errors());
     }
+
+    SUBCASE("Pattern matching: Valid string operands") {
+        DiagnosticEngine diag;
+        bool ok = check_semantic("SELECT name FROM components WHERE name LIKE 'express%' AND purl CONTAINS 'npm';", diag);
+        CHECK(ok);
+        CHECK_FALSE(diag.has_errors());
+    }
+
+    SUBCASE("Pattern matching: Type mismatch with integer/float") {
+        DiagnosticEngine diag;
+        // score is Float, CONTAINS requires String
+        bool ok1 = check_semantic("SELECT * FROM vulnerabilities WHERE score CONTAINS '7';", diag);
+        CHECK_FALSE(ok1);
+        CHECK(diag.has_errors());
+
+        DiagnosticEngine diag2;
+        // cwe is Integer, LIKE requires String
+        bool ok2 = check_semantic("SELECT * FROM vulnerabilities WHERE cwe LIKE '500%';", diag2);
+        CHECK_FALSE(ok2);
+        CHECK(diag2.has_errors());
+
+        DiagnosticEngine diag3;
+        // name is String, comparing with integer literal via LIKE is invalid
+        bool ok3 = check_semantic("SELECT * FROM components WHERE name LIKE 42;", diag3);
+        CHECK_FALSE(ok3);
+        CHECK(diag3.has_errors());
+    }
 }

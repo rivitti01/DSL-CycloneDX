@@ -4,8 +4,51 @@
 #include <regex>
 #include <chrono>
 #include <algorithm>
+#include <cctype>
 
 namespace sbom_dsl {
+
+namespace {
+
+std::string sql_like_to_regex(std::string_view pattern) {
+    std::string rx = "^";
+    for (size_t i = 0; i < pattern.size(); ++i) {
+        char c = pattern[i];
+        if (c == '%') {
+            rx += ".*";
+        } else if (c == '_') {
+            rx += ".";
+        } else if (c == '\\' && i + 1 < pattern.size()) {
+            char next = pattern[++i];
+            if (std::string_view("^$.*+?()[]{}|\\").find(next) != std::string_view::npos) {
+                rx += '\\';
+            }
+            rx += next;
+        } else {
+            if (std::string_view("^$.*+?()[]{}|\\").find(c) != std::string_view::npos) {
+                rx += '\\';
+            }
+            rx += c;
+        }
+    }
+    rx += "$";
+    return rx;
+}
+
+bool case_insensitive_contains(std::string_view str, std::string_view sub) {
+    if (sub.empty()) return true;
+    auto it = std::search(
+        str.begin(), str.end(),
+        sub.begin(), sub.end(),
+        [](char ch1, char ch2) {
+            return std::tolower(static_cast<unsigned char>(ch1)) ==
+                   std::tolower(static_cast<unsigned char>(ch2));
+        }
+    );
+    return it != str.end();
+}
+
+} // anonymous namespace
 
 bool NativeEngine::load_bom_file(const std::string& path, DiagnosticEngine& diag) {
     std::ifstream file(path);
@@ -153,6 +196,12 @@ bool NativeEngine::evaluate_expression(const ExpressionNode& expr, const nlohman
 
         const auto* col = dynamic_cast<const ColumnRefExpr*>(bin->left.get());
         const auto* lit = dynamic_cast<const LiteralExpr*>(bin->right.get());
+        bool reversed = false;
+        if (!col || !lit) {
+            col = dynamic_cast<const ColumnRefExpr*>(bin->right.get());
+            lit = dynamic_cast<const LiteralExpr*>(bin->left.get());
+            reversed = true;
+        }
         if (!col || !lit) return true;
 
         nlohmann::json field_val = resolve_field(col->path, item);
@@ -163,29 +212,46 @@ bool NativeEngine::evaluate_expression(const ExpressionNode& expr, const nlohman
 
             if constexpr (std::is_same_v<T, std::string>) {
                 std::string s_val = field_val.is_string() ? field_val.get<std::string>() : field_val.dump();
+                const std::string& pat = reversed ? s_val : target_val;
+                const std::string& text = reversed ? target_val : s_val;
+
                 if (bin->op == BinaryOperator::Equal) return s_val == target_val;
                 if (bin->op == BinaryOperator::NotEqual) return s_val != target_val;
                 if (bin->op == BinaryOperator::Contains) {
-                    return s_val.find(target_val) != std::string::npos;
+                    return case_insensitive_contains(text, pat);
                 }
-                if (bin->op == BinaryOperator::Matches || bin->op == BinaryOperator::Like) {
+                if (bin->op == BinaryOperator::Like) {
                     try {
-                        std::regex re(target_val, std::regex_constants::icase);
-                        return std::regex_search(s_val, re);
+                        std::regex re(sql_like_to_regex(pat), std::regex_constants::icase);
+                        return std::regex_match(text, re);
                     } catch (...) {
                         return false;
                     }
                 }
+                if (bin->op == BinaryOperator::Matches) {
+                    try {
+                        std::regex re(pat, std::regex_constants::icase);
+                        return std::regex_search(text, re);
+                    } catch (...) {
+                        return false;
+                    }
+                }
+                if (bin->op == BinaryOperator::Less) return reversed ? target_val < s_val : s_val < target_val;
+                if (bin->op == BinaryOperator::LessEqual) return reversed ? target_val <= s_val : s_val <= target_val;
+                if (bin->op == BinaryOperator::Greater) return reversed ? target_val > s_val : s_val > target_val;
+                if (bin->op == BinaryOperator::GreaterEqual) return reversed ? target_val >= s_val : s_val >= target_val;
                 return false;
             } else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, double>) {
                 double d_field = field_val.is_number() ? field_val.get<double>() : 0.0;
                 double d_target = static_cast<double>(target_val);
-                if (bin->op == BinaryOperator::Equal) return d_field == d_target;
-                if (bin->op == BinaryOperator::NotEqual) return d_field != d_target;
-                if (bin->op == BinaryOperator::Less) return d_field < d_target;
-                if (bin->op == BinaryOperator::LessEqual) return d_field <= d_target;
-                if (bin->op == BinaryOperator::Greater) return d_field > d_target;
-                if (bin->op == BinaryOperator::GreaterEqual) return d_field >= d_target;
+                double left_v = reversed ? d_target : d_field;
+                double right_v = reversed ? d_field : d_target;
+                if (bin->op == BinaryOperator::Equal) return left_v == right_v;
+                if (bin->op == BinaryOperator::NotEqual) return left_v != right_v;
+                if (bin->op == BinaryOperator::Less) return left_v < right_v;
+                if (bin->op == BinaryOperator::LessEqual) return left_v <= right_v;
+                if (bin->op == BinaryOperator::Greater) return left_v > right_v;
+                if (bin->op == BinaryOperator::GreaterEqual) return left_v >= right_v;
                 return false;
             } else if constexpr (std::is_same_v<T, bool>) {
                 bool b_field = field_val.is_boolean() ? field_val.get<bool>() : false;
@@ -212,12 +278,14 @@ bool NativeEngine::evaluate_expression(const ExpressionNode& expr, const nlohman
 
                 int r_item = rank(*item_sev);
                 int r_target = rank(target_val);
-                if (bin->op == BinaryOperator::Equal) return r_item == r_target;
-                if (bin->op == BinaryOperator::NotEqual) return r_item != r_target;
-                if (bin->op == BinaryOperator::Less) return r_item < r_target;
-                if (bin->op == BinaryOperator::LessEqual) return r_item <= r_target;
-                if (bin->op == BinaryOperator::Greater) return r_item > r_target;
-                if (bin->op == BinaryOperator::GreaterEqual) return r_item >= r_target;
+                int left_r = reversed ? r_target : r_item;
+                int right_r = reversed ? r_item : r_target;
+                if (bin->op == BinaryOperator::Equal) return left_r == right_r;
+                if (bin->op == BinaryOperator::NotEqual) return left_r != right_r;
+                if (bin->op == BinaryOperator::Less) return left_r < right_r;
+                if (bin->op == BinaryOperator::LessEqual) return left_r <= right_r;
+                if (bin->op == BinaryOperator::Greater) return left_r > right_r;
+                if (bin->op == BinaryOperator::GreaterEqual) return left_r >= right_r;
                 return false;
             }
             return false;
