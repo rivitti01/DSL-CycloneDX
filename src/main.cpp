@@ -5,6 +5,7 @@
 #include "sbom_dsl/semantic/type_checker.hpp"
 #include "sbom_dsl/lowering/query_lowerer.hpp"
 #include "sbom_dsl/ir/ir_printer.hpp"
+#include "sbom_dsl/ir/ir_optimizer.hpp"
 #include "sbom_dsl/backend/native_engine.hpp"
 #include "sbom_dsl/backend/sbom_utility_codegen.hpp"
 #include "sbom_dsl/backend/result_formatter.hpp"
@@ -102,18 +103,29 @@ static int execute_query_pipeline(const std::string& source,
 
         auto plan = lowerer.lower(*stmt);
 
+        IROptimizer optimizer;
+        auto optimized_plan = optimizer.optimize(plan);
+
         if (opts.explain) {
             std::cout << "\n=======================================================\n";
             std::cout << "[PHASE 4] LOWERING TO INTERMEDIATE REPRESENTATION (IR):\n";
             std::cout << "=======================================================\n";
+            std::cout << "--- Initial Plan (Unoptimized) ---\n";
             std::cout << IRPrinter::print(plan);
+
+            std::cout << "\n=======================================================\n";
+            std::cout << "[PHASE 4.1] IR OPTIMIZATION (ALGEBRAIC OPTIMIZER):\n";
+            std::cout << "=======================================================\n";
+            std::cout << "Applied Passes: Constant Folding, Predicate Pushdown, Dead Filter Elimination\n";
+            std::cout << "--- Optimized Plan ---\n";
+            std::cout << IRPrinter::print(optimized_plan);
 
             std::cout << "\n=======================================================\n";
             std::cout << "[PHASE 5] TARGET CODEGEN (sbom-utility):\n";
             std::cout << "=======================================================\n";
             std::string reason;
-            if (SbomUtilityCodeGen::can_offload(plan, &reason)) {
-                auto cmd = SbomUtilityCodeGen::generate_command(plan, opts.bom_file.value_or("bom.json"));
+            if (SbomUtilityCodeGen::can_offload(optimized_plan, &reason)) {
+                auto cmd = SbomUtilityCodeGen::generate_command(optimized_plan, opts.bom_file.value_or("bom.json"));
                 std::cout << "  Mappable to sbom-utility CLI: YES\n";
                 std::cout << "  Generated Command: " << cmd.value_or("") << "\n";
             } else {
@@ -128,8 +140,8 @@ static int execute_query_pipeline(const std::string& source,
 
         // Execution
         QueryResult result;
-        if (opts.prefer_sbom_utility && SbomUtilityCodeGen::can_offload(plan)) {
-            auto cmd = SbomUtilityCodeGen::generate_command(plan, opts.bom_file.value_or("bom.json"));
+        if (opts.prefer_sbom_utility && SbomUtilityCodeGen::can_offload(optimized_plan)) {
+            auto cmd = SbomUtilityCodeGen::generate_command(optimized_plan, opts.bom_file.value_or("bom.json"));
             if (cmd) {
                 result = SbomUtilityCodeGen::execute_command(*cmd, diag);
             }
@@ -137,7 +149,7 @@ static int execute_query_pipeline(const std::string& source,
         
         if (result.is_empty()) {
             // Run on Native Engine
-            result = engine.execute(plan, diag);
+            result = engine.execute(optimized_plan, diag);
         }
 
         if (result.is_assertion && !result.assertion_passed) {

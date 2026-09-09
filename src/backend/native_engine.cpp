@@ -1,4 +1,5 @@
 #include "sbom_dsl/backend/native_engine.hpp"
+#include "sbom_dsl/ir/ir_optimizer.hpp"
 #include <fstream>
 #include <queue>
 #include <regex>
@@ -186,12 +187,30 @@ nlohmann::json NativeEngine::resolve_field(const std::vector<std::string>& path,
 }
 
 bool NativeEngine::evaluate_expression(const ExpressionNode& expr, const nlohmann::json& item) {
+    if (const auto* lit = dynamic_cast<const LiteralExpr*>(&expr)) {
+        if (std::holds_alternative<bool>(lit->value)) {
+            return std::get<bool>(lit->value);
+        }
+    }
+
     if (const auto* bin = dynamic_cast<const BinaryOpExpr*>(&expr)) {
         if (bin->op == BinaryOperator::And) {
             return evaluate_expression(*bin->left, item) && evaluate_expression(*bin->right, item);
         }
         if (bin->op == BinaryOperator::Or) {
             return evaluate_expression(*bin->left, item) || evaluate_expression(*bin->right, item);
+        }
+
+        const auto* lit_l = dynamic_cast<const LiteralExpr*>(bin->left.get());
+        const auto* lit_r = dynamic_cast<const LiteralExpr*>(bin->right.get());
+        if (lit_l && lit_r) {
+            IROptimizer opt;
+            auto folded = opt.fold_expression(clone_expression(&expr));
+            if (const auto* f_lit = dynamic_cast<const LiteralExpr*>(folded.get())) {
+                if (std::holds_alternative<bool>(f_lit->value)) {
+                    return std::get<bool>(f_lit->value);
+                }
+            }
         }
 
         const auto* col = dynamic_cast<const ColumnRefExpr*>(bin->left.get());
@@ -329,6 +348,10 @@ std::vector<nlohmann::json> NativeEngine::eval_scan(const IRScan& scan, Diagnost
 }
 
 std::vector<nlohmann::json> NativeEngine::eval_filter(const IRFilter& filter, DiagnosticEngine& diag) {
+    if (filter.predicate && IROptimizer::is_false_literal(filter.predicate.get())) {
+        return {};
+    }
+
     auto items = evaluate_ir_node(*filter.child, diag);
     if (!filter.predicate) return items;
 

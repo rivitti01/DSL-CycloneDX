@@ -1,34 +1,12 @@
 #include "sbom_dsl/lowering/query_lowerer.hpp"
+#include "sbom_dsl/ir/ir_optimizer.hpp"
 #include <stdexcept>
 #include <sstream>
 
 namespace sbom_dsl {
 
 std::unique_ptr<ExpressionNode> QueryLowerer::clone_expression(const ExpressionNode* expr) {
-    if (!expr) return nullptr;
-
-    if (const auto* bin = dynamic_cast<const BinaryOpExpr*>(expr)) {
-        return std::make_unique<BinaryOpExpr>(
-            bin->op,
-            clone_expression(bin->left.get()),
-            clone_expression(bin->right.get()),
-            bin->location
-        );
-    }
-    if (const auto* un = dynamic_cast<const UnaryOpExpr*>(expr)) {
-        return std::make_unique<UnaryOpExpr>(
-            un->op,
-            clone_expression(un->operand.get()),
-            un->location
-        );
-    }
-    if (const auto* col = dynamic_cast<const ColumnRefExpr*>(expr)) {
-        return std::make_unique<ColumnRefExpr>(col->path, col->location);
-    }
-    if (const auto* lit = dynamic_cast<const LiteralExpr*>(expr)) {
-        return std::make_unique<LiteralExpr>(lit->value, lit->location);
-    }
-    return nullptr;
+    return sbom_dsl::clone_expression(expr);
 }
 
 IRPlan QueryLowerer::lower(StatementNode& statement) {
@@ -123,11 +101,6 @@ IRPlan QueryLowerer::lower_find_vulnerable(FindVulnerableStatement& stmt) {
         vuln_pipeline = std::make_unique<IRFilter>(std::move(vuln_pipeline), std::move(sev_pred));
     }
 
-    // Additional where clause
-    if (stmt.where_clause) {
-        vuln_pipeline = std::make_unique<IRFilter>(std::move(vuln_pipeline), clone_expression(stmt.where_clause.get()));
-    }
-
     // 2. Scan components
     std::unique_ptr<IRNode> comp_pipeline = std::make_unique<IRScan>("components", stmt.bom_path);
     if (stmt.libraries_only) {
@@ -146,9 +119,16 @@ IRPlan QueryLowerer::lower_find_vulnerable(FindVulnerableStatement& stmt) {
         "bom-ref"
     );
 
+    std::unique_ptr<IRNode> root = std::move(join);
+
+    // Additional where clause on joined relation in unoptimized IR (to be pushed down by IROptimizer)
+    if (stmt.where_clause) {
+        root = std::make_unique<IRFilter>(std::move(root), clone_expression(stmt.where_clause.get()));
+    }
+
     // 4. Project
     std::vector<std::string> proj = {"name", "version", "type", "vuln_id", "severity", "score", "description"};
-    plan.root = std::make_unique<IRProject>(std::move(join), proj);
+    plan.root = std::make_unique<IRProject>(std::move(root), proj);
     return plan;
 }
 
@@ -228,10 +208,6 @@ IRPlan QueryLowerer::lower_assert(AssertStatement& stmt) {
             vuln_pipeline = std::make_unique<IRFilter>(std::move(vuln_pipeline), std::move(score_pred));
         }
 
-        if (stmt.where_clause) {
-            vuln_pipeline = std::make_unique<IRFilter>(std::move(vuln_pipeline), clone_expression(stmt.where_clause.get()));
-        }
-
         // 2. Scan components
         std::unique_ptr<IRNode> comp_pipeline = std::make_unique<IRScan>("components", stmt.bom_path);
 
@@ -243,9 +219,15 @@ IRPlan QueryLowerer::lower_assert(AssertStatement& stmt) {
             "bom-ref"
         );
 
+        std::unique_ptr<IRNode> root = std::move(join);
+
+        if (stmt.where_clause) {
+            root = std::make_unique<IRFilter>(std::move(root), clone_expression(stmt.where_clause.get()));
+        }
+
         // 4. Project
         std::vector<std::string> proj = {"name", "version", "type", "vuln_id", "severity", "score", "description"};
-        plan.root = std::make_unique<IRProject>(std::move(join), proj);
+        plan.root = std::make_unique<IRProject>(std::move(root), proj);
     } else {
         bool is_lib = (stmt.target == AssertTarget::Libraries);
         plan.assertion_title = is_lib ? "ASSERT NO LIBRARIES" : "ASSERT NO COMPONENTS";

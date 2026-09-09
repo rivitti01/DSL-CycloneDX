@@ -46,6 +46,7 @@ set(CORE_SOURCES
     src/semantic/schema_catalog.cpp
     src/semantic/type_checker.cpp
     src/ir/ir_printer.cpp
+    src/ir/ir_optimizer.cpp
     src/lowering/query_lowerer.cpp
     src/backend/native_engine.cpp
     src/backend/sbom_utility_codegen.cpp

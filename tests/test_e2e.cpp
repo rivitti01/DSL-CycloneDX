@@ -142,13 +142,18 @@ TEST_CASE("End-to-End: Full Compiler Pipeline") {
     }
 
     SUBCASE("CLI Gatekeeper exit codes (0 on compliance, 1 on violation)") {
+        std::string exe = "./sbom-dsl";
+        if (std::ifstream("./build/sbom-dsl").good()) {
+            exe = "./build/sbom-dsl";
+        }
+
         // Run passing query
-        std::string cmd_pass = "./sbom-dsl -b \"" + FIXTURE + "\" -c \"ASSERT NO VULNERABILITIES SEVERITY > 10.0;\" > /dev/null 2>&1";
+        std::string cmd_pass = exe + " -b \"" + FIXTURE + "\" -c \"ASSERT NO VULNERABILITIES SEVERITY > 10.0;\" > /dev/null 2>&1";
         int ret_pass = std::system(cmd_pass.c_str());
         CHECK(ret_pass == 0);
 
         // Run failing query
-        std::string cmd_fail = "./sbom-dsl -b \"" + FIXTURE + "\" -c \"ASSERT NO VULNERABILITIES SEVERITY >= HIGH;\" > /dev/null 2>&1";
+        std::string cmd_fail = exe + " -b \"" + FIXTURE + "\" -c \"ASSERT NO VULNERABILITIES SEVERITY >= HIGH;\" > /dev/null 2>&1";
         int ret_fail = std::system(cmd_fail.c_str());
         int exit_code = (ret_fail >= 0 && ret_fail <= 255) ? ret_fail : (ret_fail >> 8);
         CHECK(exit_code == 1);

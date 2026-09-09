@@ -106,7 +106,13 @@ The system is structured as a full multi-stage compiler, cleanly separating lang
   - `IRGraphTraverse`: Direct/reverse transitive closure over the dependency graph.
   - `IRBlastRadius`: Computation of blast radius metrics and reachability.
 
-### 2.6 Phase 6: Dual Execution Backend
+### 2.6 Phase 5.1: Algebraic Query Optimization (`IROptimizer`)
+- **Responsibility**: Optimizes the relational IR tree prior to backend code generation and execution:
+  - **Constant Folding & Boolean Identity Simplification**: Evaluates compile-time literals (integers, floats, strings, booleans, CVSS severities, `LIKE`/`CONTAINS`/`MATCHES`), eliminates tautologies/contradictions (`true AND x` $\to$ `x`, `false AND x` $\to$ `false`), and removes redundant `IRFilter` nodes (*Dead Filter Elimination*).
+  - **Predicate Pushdown**: Inspects predicates above `IRHashJoin` nodes, decomposes top-level conjunctions, and pushes filter predicates down to the respective child branches (`components` or `vulnerabilities`) based on schema catalog analysis. This minimizes the cardinality of intermediate relations prior to join and sort operations.
+  - **Explain Integration**: The `--explain` CLI option visualizes both the unoptimized plan and the optimized algebraic plan with applied passes.
+
+### 2.7 Phase 6: Dual Execution Backend
 To balance instructor guidance with overcoming the intrinsic limitations of the official `sbom-utility` tool:
 1. **`SbomUtilityCodeGen`**:
    - Inspects the IR plan. If the query is compatible with `sbom-utility` primitives (scan + simple equality filtering), synthesizes the corresponding shell CLI command:

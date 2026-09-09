@@ -4,6 +4,7 @@
 #include "sbom_dsl/parser/parser.hpp"
 #include "sbom_dsl/lowering/query_lowerer.hpp"
 #include "sbom_dsl/ir/ir_printer.hpp"
+#include "sbom_dsl/ir/ir_optimizer.hpp"
 
 using namespace sbom_dsl;
 
@@ -183,3 +184,206 @@ TEST_CASE("Lowering: Policy assertions (ASSERT NO ...)") {
         CHECK(filter->child->type() == IRNodeType::Scan);
     }
 }
+
+TEST_CASE("IROptimizer: Constant Folding and Simplification") {
+    IROptimizer optimizer;
+
+    SUBCASE("Fold WHERE 1 = 1 AND name = 'express'") {
+        std::string q = "SELECT name FROM components WHERE 1 = 1 AND name = 'express';";
+        auto plan = parse_and_lower(q);
+
+        // Pre-optimization check
+        auto* proj_pre = dynamic_cast<IRProject*>(plan.root.get());
+        REQUIRE(proj_pre != nullptr);
+        auto* filter_pre = dynamic_cast<IRFilter*>(proj_pre->child.get());
+        REQUIRE(filter_pre != nullptr);
+        auto* and_bin_pre = dynamic_cast<BinaryOpExpr*>(filter_pre->predicate.get());
+        REQUIRE(and_bin_pre != nullptr);
+        CHECK(and_bin_pre->op == BinaryOperator::And);
+
+        // Post-optimization check
+        auto opt_plan = optimizer.optimize(plan);
+        REQUIRE(opt_plan.root != nullptr);
+        auto* proj_opt = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj_opt != nullptr);
+        auto* filter_opt = dynamic_cast<IRFilter*>(proj_opt->child.get());
+        REQUIRE(filter_opt != nullptr);
+
+        // Filter predicate must now be simplified directly to: name = 'express'
+        auto* eq_bin = dynamic_cast<BinaryOpExpr*>(filter_opt->predicate.get());
+        REQUIRE(eq_bin != nullptr);
+        CHECK(eq_bin->op == BinaryOperator::Equal);
+
+        auto* col = dynamic_cast<ColumnRefExpr*>(eq_bin->left.get());
+        REQUIRE(col != nullptr);
+        CHECK(col->full_path() == "name");
+
+        auto* lit = dynamic_cast<LiteralExpr*>(eq_bin->right.get());
+        REQUIRE(lit != nullptr);
+        CHECK(lit->value_as_string() == "\"express\"");
+    }
+
+    SUBCASE("Dead filter elimination for tautology WHERE 1 = 1") {
+        std::string q = "SELECT name FROM components WHERE 1 = 1;";
+        auto plan = parse_and_lower(q);
+
+        // Pre-optimization has IRFilter
+        auto* proj_pre = dynamic_cast<IRProject*>(plan.root.get());
+        REQUIRE(proj_pre != nullptr);
+        CHECK(proj_pre->child->type() == IRNodeType::Filter);
+
+        // Post-optimization has eliminated the filter completely!
+        auto opt_plan = optimizer.optimize(plan);
+        auto* proj_opt = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj_opt != nullptr);
+        CHECK(proj_opt->child->type() == IRNodeType::Scan);
+    }
+
+    SUBCASE("Fold WHERE 1 = 0 AND name = 'express' to false literal") {
+        std::string q = "SELECT name FROM components WHERE 1 = 0 AND name = 'express';";
+        auto plan = parse_and_lower(q);
+
+        auto opt_plan = optimizer.optimize(plan);
+        auto* proj_opt = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj_opt != nullptr);
+        auto* filter_opt = dynamic_cast<IRFilter*>(proj_opt->child.get());
+        REQUIRE(filter_opt != nullptr);
+
+        CHECK(IROptimizer::is_false_literal(filter_opt->predicate.get()));
+    }
+
+    SUBCASE("Fold double negation NOT (1 = 0) AND name = 'express'") {
+        std::string q = "SELECT name FROM components WHERE NOT (1 = 0) AND name = 'express';";
+        auto plan = parse_and_lower(q);
+
+        auto opt_plan = optimizer.optimize(plan);
+        auto* proj_opt = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj_opt != nullptr);
+        auto* filter_opt = dynamic_cast<IRFilter*>(proj_opt->child.get());
+        REQUIRE(filter_opt != nullptr);
+
+        auto* eq_bin = dynamic_cast<BinaryOpExpr*>(filter_opt->predicate.get());
+        REQUIRE(eq_bin != nullptr);
+        CHECK(eq_bin->op == BinaryOperator::Equal);
+        auto* col = dynamic_cast<ColumnRefExpr*>(eq_bin->left.get());
+        REQUIRE(col != nullptr);
+        CHECK(col->full_path() == "name");
+    }
+
+    SUBCASE("Fold nested complex constants: (10 > 5 AND 'a' = 'a') AND name = 'express'") {
+        std::string q = "SELECT name FROM components WHERE (10 > 5 AND 'a' = 'a') AND name = 'express';";
+        auto plan = parse_and_lower(q);
+
+        auto opt_plan = optimizer.optimize(plan);
+        auto* proj_opt = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj_opt != nullptr);
+        auto* filter_opt = dynamic_cast<IRFilter*>(proj_opt->child.get());
+        REQUIRE(filter_opt != nullptr);
+
+        auto* eq_bin = dynamic_cast<BinaryOpExpr*>(filter_opt->predicate.get());
+        REQUIRE(eq_bin != nullptr);
+        CHECK(eq_bin->op == BinaryOperator::Equal);
+    }
+}
+
+TEST_CASE("IROptimizer: Predicate Pushdown") {
+    IROptimizer optimizer;
+
+    SUBCASE("Pushdown component filter to right branch of join") {
+        std::string q = "FIND VULNERABLE LIBRARIES SEVERITY >= HIGH WHERE name = 'log4j-core';";
+        auto plan = parse_and_lower(q);
+
+        // Pre-optimization: Filter is on top of HashJoin
+        auto* proj_pre = dynamic_cast<IRProject*>(plan.root.get());
+        REQUIRE(proj_pre != nullptr);
+        auto* filter_pre = dynamic_cast<IRFilter*>(proj_pre->child.get());
+        REQUIRE(filter_pre != nullptr);
+        CHECK(filter_pre->child->type() == IRNodeType::HashJoin);
+
+        // Post-optimization: Filter has been pushed down to the right branch (components)!
+        auto opt_plan = optimizer.optimize(plan);
+        auto* proj_opt = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj_opt != nullptr);
+        CHECK(proj_opt->child->type() == IRNodeType::HashJoin);
+
+        auto* join_opt = dynamic_cast<IRHashJoin*>(proj_opt->child.get());
+        REQUIRE(join_opt != nullptr);
+        // Left branch remains vulnerabilities filter
+        CHECK(join_opt->left->type() == IRNodeType::Filter);
+        // Right branch has the pushed-down filter on components!
+        CHECK(join_opt->right->type() == IRNodeType::Filter);
+
+        auto* right_filter = dynamic_cast<IRFilter*>(join_opt->right.get());
+        REQUIRE(right_filter != nullptr);
+        // Scans components underneath
+        CHECK(right_filter->child->type() == IRNodeType::Scan);
+        // Predicate contains name filter
+        std::string right_desc = right_filter->description();
+        CHECK(right_desc.find("name") != std::string::npos);
+        CHECK(right_desc.find("library") != std::string::npos);
+    }
+
+    SUBCASE("Pushdown vulnerability filter to left branch of join") {
+        std::string q = "FIND VULNERABLE LIBRARIES SEVERITY >= HIGH WHERE cwe = 502;";
+        auto plan = parse_and_lower(q);
+
+        auto opt_plan = optimizer.optimize(plan);
+        auto* proj_opt = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj_opt != nullptr);
+        CHECK(proj_opt->child->type() == IRNodeType::HashJoin);
+
+        auto* join_opt = dynamic_cast<IRHashJoin*>(proj_opt->child.get());
+        REQUIRE(join_opt != nullptr);
+
+        // Left branch has cwe filter merged
+        auto* left_filter = dynamic_cast<IRFilter*>(join_opt->left.get());
+        REQUIRE(left_filter != nullptr);
+        std::string left_desc = left_filter->description();
+        CHECK(left_desc.find("cwe") != std::string::npos);
+        CHECK(left_desc.find("ratings.severity") != std::string::npos);
+    }
+
+    SUBCASE("Pushdown composite WHERE splitting across both join branches") {
+        std::string q = "FIND VULNERABLE LIBRARIES SEVERITY >= HIGH WHERE cwe = 502 AND name = 'log4j-core';";
+        auto plan = parse_and_lower(q);
+
+        auto opt_plan = optimizer.optimize(plan);
+        auto* proj_opt = dynamic_cast<IRProject*>(opt_plan.root.get());
+        REQUIRE(proj_opt != nullptr);
+        CHECK(proj_opt->child->type() == IRNodeType::HashJoin);
+
+        auto* join_opt = dynamic_cast<IRHashJoin*>(proj_opt->child.get());
+        REQUIRE(join_opt != nullptr);
+
+        // Left branch contains cwe
+        auto* left_filter = dynamic_cast<IRFilter*>(join_opt->left.get());
+        REQUIRE(left_filter != nullptr);
+        CHECK(left_filter->description().find("cwe") != std::string::npos);
+
+        // Right branch contains name
+        auto* right_filter = dynamic_cast<IRFilter*>(join_opt->right.get());
+        REQUIRE(right_filter != nullptr);
+        CHECK(right_filter->description().find("name") != std::string::npos);
+    }
+
+    SUBCASE("Pushdown past IRSort") {
+        // Manually build Filter over Sort: Filter(name = 'express', Sort(name ASC, Scan("components")))
+        auto scan = std::make_unique<IRScan>("components");
+        auto sort = std::make_unique<IRSort>(std::move(scan), "name", true);
+        auto col = std::make_unique<ColumnRefExpr>(std::vector<std::string>{"name"}, SourceLocation{});
+        auto lit = std::make_unique<LiteralExpr>(std::string("express"), SourceLocation{});
+        auto pred = std::make_unique<BinaryOpExpr>(BinaryOperator::Equal, std::move(col), std::move(lit), SourceLocation{});
+        auto filter = std::make_unique<IRFilter>(std::move(sort), std::move(pred));
+
+        auto pushed = optimizer.pushdown_predicates(std::move(filter));
+        REQUIRE(pushed != nullptr);
+        CHECK(pushed->type() == IRNodeType::Sort);
+        auto* sort_res = dynamic_cast<IRSort*>(pushed.get());
+        REQUIRE(sort_res != nullptr);
+        CHECK(sort_res->child->type() == IRNodeType::Filter);
+        auto* filter_res = dynamic_cast<IRFilter*>(sort_res->child.get());
+        REQUIRE(filter_res != nullptr);
+        CHECK(filter_res->child->type() == IRNodeType::Scan);
+    }
+}
+

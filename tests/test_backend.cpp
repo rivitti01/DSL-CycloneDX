@@ -6,6 +6,7 @@
 #include "sbom_dsl/backend/native_engine.hpp"
 #include "sbom_dsl/backend/sbom_utility_codegen.hpp"
 #include "sbom_dsl/backend/result_formatter.hpp"
+#include "sbom_dsl/ir/ir_optimizer.hpp"
 
 using namespace sbom_dsl;
 
@@ -29,6 +30,29 @@ static QueryResult run_query(const std::string& query) {
     REQUIRE(ok);
 
     return engine.execute(plan, diag);
+}
+
+static QueryResult run_optimized_query(const std::string& query) {
+    DiagnosticEngine diag;
+    Lexer lexer(query, "test.dsl", diag);
+    auto tokens = lexer.tokenize();
+    Parser parser(std::move(tokens), diag);
+    auto prog = parser.parse_program();
+    REQUIRE_FALSE(diag.has_errors());
+    REQUIRE(prog != nullptr);
+    REQUIRE(prog->statements.size() == 1);
+
+    QueryLowerer lowerer;
+    auto plan = lowerer.lower(*prog->statements[0]);
+
+    IROptimizer optimizer;
+    auto opt_plan = optimizer.optimize(plan);
+
+    NativeEngine engine;
+    bool ok = engine.load_bom_file(FIXTURE_PATH, diag);
+    REQUIRE(ok);
+
+    return engine.execute(opt_plan, diag);
 }
 
 TEST_CASE("Backend: SELECT components") {
@@ -227,3 +251,76 @@ TEST_CASE("Backend: Result Formatter") {
     std::string json = ResultFormatter::to_json(res);
     CHECK(json.find("\"name\": \"express\"") != std::string::npos);
 }
+
+TEST_CASE("Backend: Functional Equivalence with IROptimizer") {
+    SUBCASE("SELECT components with constant tautology WHERE 1 = 1") {
+        std::string q = "SELECT name, version FROM components WHERE 1 = 1 AND type = 'library' ORDER BY name ASC;";
+        auto res_opt = run_optimized_query(q);
+        auto res_unopt = run_query(q);
+
+        CHECK_FALSE(res_opt.is_empty());
+        CHECK(res_opt.columns == res_unopt.columns);
+        CHECK(res_opt.rows == res_unopt.rows);
+        CHECK(res_opt.rows.size() == 5);
+        CHECK(res_opt.rows[0][0] == "body-parser");
+        CHECK(res_opt.rows[1][0] == "express");
+        CHECK(res_opt.rows[2][0] == "lodash");
+        CHECK(res_opt.rows[3][0] == "log4j-core");
+        CHECK(res_opt.rows[4][0] == "qs");
+    }
+
+    SUBCASE("WHERE 1 = 0 produces empty result in both plans") {
+        std::string q = "SELECT name FROM components WHERE 1 = 0;";
+        auto res_opt = run_optimized_query(q);
+        auto res_unopt = run_query(q);
+
+        CHECK(res_opt.rows.empty());
+        CHECK(res_unopt.rows.empty());
+    }
+
+    SUBCASE("Pushed-down join predicate on component name") {
+        std::string q = "FIND VULNERABLE LIBRARIES SEVERITY >= HIGH WHERE name = 'log4j-core';";
+        auto res_opt = run_optimized_query(q);
+        auto res_unopt = run_query(q);
+
+        CHECK_FALSE(res_opt.is_empty());
+        CHECK(res_opt.rows.size() == 1);
+        CHECK(res_opt.rows[0][0] == "log4j-core");
+        CHECK(res_opt.rows == res_unopt.rows);
+    }
+
+    SUBCASE("Pushed-down join predicate on vulnerability cwe") {
+        std::string q = "FIND VULNERABLE LIBRARIES SEVERITY >= HIGH WHERE cwe = 502;";
+        auto res_opt = run_optimized_query(q);
+        auto res_unopt = run_query(q);
+
+        CHECK_FALSE(res_opt.is_empty());
+        CHECK(res_opt.rows.size() == 1);
+        CHECK(res_opt.rows[0][0] == "log4j-core");
+        CHECK(res_opt.rows == res_unopt.rows);
+    }
+
+    SUBCASE("Full functional equivalence across multiple query types") {
+        std::vector<std::string> queries = {
+            "SELECT name FROM components ORDER BY name ASC;",
+            "SELECT name, version FROM components WHERE type = 'library';",
+            "WHO USES 'qs' TRANSITIVE;",
+            "SHOW TREE OF 'my-web-app' DEPTH 2;",
+            "FIND BLAST RADIUS OF 'CVE-2022-29244';",
+            "SELECT name FROM components WHERE 1 = 1 AND (name LIKE 'exp%' OR name = 'lodash');",
+            "ASSERT NO VULNERABILITIES SEVERITY > 10.0;",
+            "ASSERT NO COMPONENTS WHERE type = 'framework';"
+        };
+
+        for (const auto& q : queries) {
+            auto res_unopt = run_query(q);
+            auto res_opt = run_optimized_query(q);
+
+            CHECK(res_unopt.columns == res_opt.columns);
+            CHECK(res_unopt.rows == res_opt.rows);
+            CHECK(res_unopt.is_assertion == res_opt.is_assertion);
+            CHECK(res_unopt.assertion_passed == res_opt.assertion_passed);
+        }
+    }
+}
+
