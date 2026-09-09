@@ -59,6 +59,8 @@ The compilation pipeline strictly follows classical compiler engineering phases:
       ↓
 [ Intermediate Rep (IR) ]  → Scan, Filter, Project, Sort, Limit, HashJoin, GraphTraverse, BlastRadius, Aggregate
       ↓
+[ IR Optimizer ]           → Predicate Pushdown, Filter Fusion, Projection Pushdown, Constant Folding, Dead Plan Elimination
+      ↓
   +---+---------------------------+
   |                               |
   v                               v
@@ -67,7 +69,7 @@ The compilation pipeline strictly follows classical compiler engineering phases:
   |                               |
   +---------------+---------------+
                   ↓
-          [ Query Results ]   (ASCII Table, JSON, Hierarchical Tree)
+          [ Query Results ]   (ASCII Table, JSON, Hierarchical Tree, Graphviz DOT, Mermaid)
 ```
 
 For more details, consult [docs/architecture.md](docs/architecture.md).
@@ -161,6 +163,12 @@ ctest --test-dir build --output-on-failure
 
 # Output in tree format
 ./build/sbom-dsl examples/show_tree.dsl --format tree
+
+# Output in Graphviz DOT format (convertible to SVG/PNG via `dot -Tsvg`)
+./build/sbom-dsl examples/show_tree.dsl --format dot
+
+# Output in Mermaid markdown diagram format
+./build/sbom-dsl examples/show_tree.dsl --format mermaid
 ```
 
 ### Explain Mode (`--explain`)
@@ -173,8 +181,9 @@ Displays in the terminal:
 2. `[PHASE 2]` Abstract Syntax Tree (`AST`);
 3. `[PHASE 3]` Semantic Analysis & Type Checking report;
 4. `[PHASE 4]` Intermediate Representation (`IR`) algebraic execution plan;
-5. `[PHASE 5]` Target code generated for `sbom-utility` or rationale for routing to the Native Engine;
-6. `[EXECUTION RESULTS]` Formatted tabular output.
+5. `[PHASE 4.1]` Algebraic IR Optimizer (Predicate pushdown, filter fusion, constant folding);
+6. `[PHASE 5]` Target code generated for `sbom-utility` or rationale for routing to the Native Engine;
+7. `[EXECUTION RESULTS]` Formatted tabular output.
 
 ### Interactive Shell (REPL)
 Can be launched without arguments or with `-i`:
@@ -184,7 +193,7 @@ Can be launched without arguments or with `-i`:
 ```text
 CycloneDX Query DSL Interactive Shell (REPL)
 Type your queries followed by ';' or 'exit'/'quit' to exit.
-Commands: ':explain [on|off]', ':bom <file>', ':format [table|json|tree]'
+Commands: ':explain [on|off]', ':bom <file>', ':format [table|json|tree|dot|mermaid]'
 
 sbom-dsl> :bom tests/fixtures/sample_cyclonedx.json
 Default SBOM set to: tests/fixtures/sample_cyclonedx.json
@@ -216,6 +225,12 @@ The [`docs/`](docs/) directory contains detailed monographic documentation:
 ---
 
 ## Limitations and Future Work
-- **Supported Formats**: Currently focused on CycloneDX JSON (versions 1.2–1.6+). Can be extended in the future to parse XML SBOMs or SPDX 3.0.
-- **Query Optimizer**: Potential introduction of a rule-based IR optimization pass (Predicate Pushdown before Joins, Projection Pushdown).
-- **Graph Export**: Support exporting `SHOW TREE` results to Graphviz DOT files or SVG vector graphics.
+
+### Completed Enhancements
+- **Query Optimizer**: Rule-based algebraic IR optimization pass implementing Constant Folding, Filter Fusion, Predicate Pushdown (across Joins and Projections), Projection Pruning, and Dead Plan Elimination (`IROptimizer`).
+- **Graph Export**: Support for exporting `SHOW TREE` hierarchy directly into Graphviz DOT format (`--format dot`) and Mermaid markdown diagrams (`--format mermaid`), easily convertible into SVG or PNG graphics.
+- **Aggregations & Grouping**: Full relational support for `COUNT(*)`, `COUNT(col)`, and multi-attribute `GROUP BY` grouping with strict semantic type validation.
+
+### Open Limitations & Future Work
+- **Supported Formats**: Currently focused on CycloneDX JSON (versions 1.2–1.6+). Can be extended in the future to parse CycloneDX XML SBOMs or other standard formats such as SPDX (SPDX 2.3 / 3.0).
+- **Extended Aggregations**: Addition of arithmetic aggregate functions (`SUM`, `AVG`, `MIN`, `MAX`) and a post-aggregation `HAVING` clause filter.

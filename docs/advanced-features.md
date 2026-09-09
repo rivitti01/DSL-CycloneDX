@@ -185,14 +185,70 @@ Output:
 
 ---
 
-### Construct 5: Multi-Stage Compiler with `--explain` Mode and `sbom-utility` Code Generation
+---
+
+### Construct 5: `ASSERT NO <target> [SEVERITY ...] [WHERE ...];` (Policy Enforcement & CI/CD Gatekeeping)
+
+#### Problem Solved
+Security analysts and DevSecOps pipelines require automated gatekeeping mechanisms to prevent deploying software violating compliance rules (e.g. presence of critical vulnerabilities, forbidden licensing, or blacklisted modules).
+
+#### Syntax and Semantics
+- Syntax: `ASSERT NO (VULNERABILITIES | COMPONENTS | LIBRARIES) [SEVERITY [op] <level_or_score>] [WHERE <cond>] [IN "<file.json>"];`
+- Semantics: Scans the target collection (with relational join against components if severity is filtered), evaluates compliance predicates. If any violating records match, the query reports all offending records and terminates with exit code `1` (or non-zero in CI/CD). If zero records violate the policy, execution succeeds with exit code `0` (`POLICY PASSED`).
+
+#### AST Representation
+```cpp
+class AssertStatement : public StatementNode {
+    AssertTarget target; // Vulnerabilities, Components, Libraries
+    std::optional<BinaryOperator> severity_op;
+    std::optional<SeverityLevel> severity_level;
+    std::optional<double> cvss_threshold;
+    std::unique_ptr<ExpressionNode> where_clause;
+    std::optional<std::string> bom_path;
+};
+```
+
+#### IR Lowering
+```
+Project(columns=[name, version, type, vuln_id, severity, score])
+  └── HashJoin(on left.affects == right.bom-ref)
+        ├── Left Input:
+        │     Filter(predicate=[ratings.severity >= HIGH])
+        │       └── Scan(collection="vulnerabilities")
+        └── Right Input:
+              Scan(collection="components")
+```
+
+#### Example and Output
+```sql
+ASSERT NO VULNERABILITIES SEVERITY >= HIGH IN "tests/fixtures/sample_cyclonedx.json";
+```
+Output:
+```
+[POLICY VIOLATION] Assert condition failed: offending records detected!
++------------+---------+---------+----------------+----------+-------+
+| name       | version | type    | vuln_id        | severity | score |
++============+=========+=========+================+==========+=======+
+| log4j-core | 2.14.1  | library | CVE-2021-44228 | critical | 10.0  |
+| qs         | 6.7.0   | library | CVE-2022-29244 | high     | 7.5   |
++------------+---------+---------+----------------+----------+-------+
+Total: 2 offending record(s) found.
+Policy Gatekeeping: FAILED (Exit Code 1)
+```
+
+---
+
+### Construct 6: Multi-Stage Compiler with `--explain` Mode, IR Optimizer, and Dual Backend
 
 #### Academic Value
 During project presentation, it is essential to demonstrate that the system is a **genuine multi-stage compiler** rather than a simple script.
 
 The `--explain` flag isolates and renders:
-1. **Lexical Phase**: Formal token listing with positional coordinates (`line:column`);
-2. **Syntactic Phase**: Hierarchical AST structure;
-3. **Semantic Phase**: Validation outcome against the CycloneDX schema catalog;
-4. **Lowering Phase**: Relational and graph IR execution plan;
-5. **Code Generation Phase**: Automatic translation into the `sbom-utility query ...` CLI command for supported queries, or analytical explanation of why the query requires the native in-memory engine (due to relational joins or graph traversals).
+1. **Lexical Phase (`[PHASE 1]`)**: Formal token listing with positional coordinates (`line:column`);
+2. **Syntactic Phase (`[PHASE 2]`)**: Hierarchical AST structure;
+3. **Semantic Phase (`[PHASE 3]`)**: Validation outcome against the CycloneDX schema catalog;
+4. **Lowering Phase (`[PHASE 4]`)**: Relational and graph IR execution plan;
+5. **Algebraic Optimizer (`[PHASE 4.1]`)**: Rule-based IR optimization pass (Constant Folding, Filter Fusion, Predicate Pushdown across joins);
+6. **Code Generation Phase (`[PHASE 5]`)**: Automatic translation into the `sbom-utility query ...` CLI command for supported queries, or analytical explanation of why the query requires the native in-memory engine (due to relational joins, graph traversals, or aggregations);
+7. **Formatted Execution Results**: Output delivered in ASCII table, JSON, hierarchical Tree, Graphviz DOT (`--format dot`), or Mermaid diagram (`--format mermaid`).
+

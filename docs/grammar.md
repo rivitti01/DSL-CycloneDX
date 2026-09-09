@@ -81,11 +81,14 @@ SelectStmt      ::= "SELECT" ProjectionList
                     [ "IN" StringLiteral ]
                     [ "WHERE" Expression ]
                     [ "IN" StringLiteral ]
+                    [ "GROUP" "BY" ColumnPath ( "," ColumnPath )* ]
                     [ "ORDER" "BY" ColumnPath [ "ASC" | "DESC" ] ]
                     [ "LIMIT" IntegerLiteral ]
                     [ "IN" StringLiteral ]
 
-ProjectionList  ::= "*" | ColumnPath ( "," ColumnPath )*
+ProjectionList  ::= "*" | ProjectionItem ( "," ProjectionItem )*
+ProjectionItem  ::= ColumnPath | AggregateExpr
+AggregateExpr   ::= "COUNT" "(" ( "*" | ColumnPath ) ")"
 CollectionRef   ::= Identifier ( "." Identifier )*
 ColumnPath      ::= Identifier ( "." Identifier )*
 ```

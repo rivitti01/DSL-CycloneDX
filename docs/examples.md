@@ -170,6 +170,32 @@ graph TD
     style body_parser fill:#e1f5fe,stroke:#81d4fa,stroke-width:1px,color:#0d47a1
 ```
 
+### Graphviz DOT Export (`--format dot`)
+```bash
+./build/sbom-dsl examples/show_tree.dsl --format dot
+```
+
+```dot
+digraph DependencyTree {
+  rankdir=TB;
+  node [shape=box, style="filled,rounded", fontname="Helvetica", margin="0.2,0.1"];
+  edge [fontname="Helvetica", fontsize=10];
+
+  "my-web-app" [label="my-web-app\n2.1.0\n[Root App]", fillcolor="#2e78d2", fontcolor="#ffffff", color="#1a539e"];
+  "express" [label="express\n4.17.1", fillcolor="#e1f5fe", fontcolor="#0d47a1", color="#81d4fa"];
+  "log4j-core" [label="log4j-core\n2.14.1\n[CVE-2021-44228: critical]", fillcolor="#ff4d4d", fontcolor="#ffffff", color="#cc0000"];
+  "body-parser" [label="body-parser\n1.19.0", fillcolor="#e1f5fe", fontcolor="#0d47a1", color="#81d4fa"];
+
+  "my-web-app" -> "express";
+  "my-web-app" -> "log4j-core";
+  "express" -> "body-parser";
+}
+```
+*Tip: Render directly into an SVG or PNG graphic:*
+```bash
+./build/sbom-dsl examples/show_tree.dsl --format dot | dot -Tsvg -o dependency_tree.svg
+```
+
 ---
 
 ## Example 5: Blast Radius Analysis (`FIND BLAST RADIUS`)
@@ -396,7 +422,7 @@ Total: 0 violations [Backend: Native CycloneDX Engine, Time: 0.11 ms]
 
 ---
 
-## Example 7: Aggregations and GROUP BY Analysis
+## Example 9: Aggregations and GROUP BY Analysis
 
 ### Scenario A: Scalar Component Counting
 Count all libraries declared in the SBOM:

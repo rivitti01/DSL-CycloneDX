@@ -37,25 +37,30 @@ The system is structured as a full multi-stage compiler, cleanly separating lang
                            +-------------------+
                                      |
                                      v
-                           +-------------------+
-                           | Intermediate Rep  |   (Relational & Graph Plan)
-                           +-------------------+
-                                     |
-                   +-----------------+-----------------+
-                   |                                   |
-                   v                                   v
-        +---------------------+             +---------------------+
-        | sbom-utility CodeGen|             |   Native Engine C++ |
-        | - CLI Generation    |             | - In-memory Graph   |
-        | - CLI Offloading    |             | - Hash Join / BFS   |
-        +---------------------+             +---------------------+
-                   |                                   |
-                   +-----------------+-----------------+
-                                     |
-                                     v
-                           +-------------------+
-                           | Result Formatter  |   (Table, JSON, Tree)
-                           +-------------------+
+                            +-------------------+
+                            | Intermediate Rep  |   (Relational & Graph Plan)
+                            +-------------------+
+                                      |
+                                      v
+                            +-------------------+
+                            |   IR Optimizer    |   (Predicate Pushdown, Fusion)
+                            +-------------------+
+                                      |
+                    +-----------------+-----------------+
+                    |                                   |
+                    v                                   v
+         +---------------------+             +---------------------+
+         | sbom-utility CodeGen|             |   Native Engine C++ |
+         | - CLI Generation    |             | - In-memory Graph   |
+         | - CLI Offloading    |             | - Hash Join / BFS   |
+         +---------------------+             +---------------------+
+                    |                                   |
+                    +-----------------+-----------------+
+                                      |
+                                      v
+                            +-------------------+
+                            | Result Formatter  |   (Table, JSON, Tree, DOT, Mermaid)
+                            +-------------------+
 ```
 
 ---
@@ -84,7 +89,7 @@ The system is structured as a full multi-stage compiler, cleanly separating lang
 - **Responsibility**: Formal, strongly typed representation of the query.
 - **C++20 Class Hierarchy**:
   - `ASTNode` (abstract base class with `SourceLocation`).
-  - `StatementNode`: `SelectStatement`, `WhoUsesStatement`, `FindVulnerableStatement`, `ShowTreeStatement`, `BlastRadiusStatement`.
+  - `StatementNode`: `SelectStatement`, `WhoUsesStatement`, `FindVulnerableStatement`, `ShowTreeStatement`, `BlastRadiusStatement`, `AssertStatement`.
   - `ExpressionNode`: `BinaryOpExpr`, `UnaryOpExpr`, `ColumnRefExpr`, `LiteralExpr`.
 - **Visitor Pattern (`ASTVisitor`)**:
   - Decouples tree data structures from traversal operations.
@@ -105,6 +110,7 @@ The system is structured as a full multi-stage compiler, cleanly separating lang
   - `IRHashJoin`: Relational equi-join (e.g., `affects == bom-ref`).
   - `IRGraphTraverse`: Direct/reverse transitive closure over the dependency graph.
   - `IRBlastRadius`: Computation of blast radius metrics and reachability.
+  - `IRAggregate`: Scalar and grouped row aggregation (`COUNT(*)`, `COUNT(col)`).
 
 ### 2.6 Phase 5.1: Algebraic Query Optimization (`IROptimizer`)
 - **Responsibility**: Optimizes the relational IR tree prior to backend code generation and execution:
@@ -143,13 +149,17 @@ To balance instructor guidance with overcoming the intrinsic limitations of the 
 | **Reverse Lookup (`WHO USES`)**| BFS on reverse graph (`reverse_graph`) | $O(V + E)$ | $O(V)$ visited set |
 | **Relational Join (`FIND VULN`)**| Hash Join on `affects <-> bom-ref` | $O(V_{uln} + C_{omp})$ | $O(C_{omp})$ hash table |
 | **Blast Radius** | Reverse BFS + impact percentage | $O(V + E)$ | $O(V)$ |
+| **Policy Enforcement (`ASSERT`)**| Hash Join + Filter evaluation | $O(V_{uln} + C_{omp})$ | $O(C_{omp})$ |
+| **Aggregation (`GROUP BY`)** | Hash-table grouping accumulator | $O(R)$ rows | $O(G)$ groups |
 
 ---
 
 ## 4. Internal Inspection Mode (`--explain`)
 The compiler features an `--explain` mode that displays the output of each individual compilation phase:
-1. Token stream with source coordinates;
-2. Pretty-printed AST tree;
-3. Semantic validation report;
-4. Algebraic IR execution plan tree;
-5. Generated `sbom-utility` command or technical rationale for fallback to the native engine.
+1. `[PHASE 1]` Token stream with source coordinates;
+2. `[PHASE 2]` Pretty-printed AST tree;
+3. `[PHASE 3]` Semantic validation report;
+4. `[PHASE 4]` Lowered Algebraic IR execution plan tree;
+5. `[PHASE 4.1]` Optimized Algebraic IR plan (after constant folding and predicate pushdown);
+6. `[PHASE 5]` Generated `sbom-utility` command or technical rationale for fallback to the native engine;
+7. `[EXECUTION RESULTS]` Formatted output (ASCII Table, JSON, Tree, Graphviz DOT, or Mermaid).
