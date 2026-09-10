@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum policy version" FORCE)
+cmake_minimum_required(VERSION 3.20...4.4)
 project(CycloneDX_DSL VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -29,7 +28,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_Declare(
     doctest
     GIT_REPOSITORY https://github.com/doctest/doctest.git
-    GIT_TAG v2.4.11
+    GIT_TAG v2.5.3
 )
 FetchContent_MakeAvailable(doctest)
 
