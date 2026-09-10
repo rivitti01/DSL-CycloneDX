@@ -1,0 +1,455 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:4b76c8c2-7f31-482a-9e16-cb17a58a9d12",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-10T10:00:00Z",
+    "tools": [
+      {
+        "vendor": "CycloneDX",
+        "name": "Node.js Module",
+        "version": "4.0.0"
+      }
+    ],
+    "component": {
+      "bom-ref": "pkg:npm/payment-service@1.3.0",
+      "type": "application",
+      "name": "payment-service",
+      "version": "1.3.0",
+      "description": "Cloud-Native E-Commerce Checkout & Payment Processing Microservice",
+      "purl": "pkg:npm/payment-service@1.3.0"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:npm/express@4.17.1",
+      "type": "library",
+      "name": "express",
+      "version": "4.17.1",
+      "scope": "required",
+      "purl": "pkg:npm/express@4.17.1",
+      "description": "Fast, unopinionated, minimalist web framework"
+    },
+    {
+      "bom-ref": "pkg:npm/body-parser@1.19.0",
+      "type": "library",
+      "name": "body-parser",
+      "version": "1.19.0",
+      "scope": "required",
+      "purl": "pkg:npm/body-parser@1.19.0",
+      "description": "Node.js body parsing middleware"
+    },
+    {
+      "bom-ref": "pkg:npm/qs@6.7.0",
+      "type": "library",
+      "name": "qs",
+      "version": "6.7.0",
+      "scope": "required",
+      "purl": "pkg:npm/qs@6.7.0",
+      "description": "A querystring parser that supports nesting and arrays"
+    },
+    {
+      "bom-ref": "pkg:npm/send@0.17.1",
+      "type": "library",
+      "name": "send",
+      "version": "0.17.1",
+      "scope": "required",
+      "purl": "pkg:npm/send@0.17.1",
+      "description": "Better streaming static file server with range and conditional-GET support"
+    },
+    {
+      "bom-ref": "pkg:npm/ms@2.1.1",
+      "type": "library",
+      "name": "ms",
+      "version": "2.1.1",
+      "scope": "required",
+      "purl": "pkg:npm/ms@2.1.1",
+      "description": "Tiny millisecond conversion utility"
+    },
+    {
+      "bom-ref": "pkg:npm/mime@1.6.0",
+      "type": "library",
+      "name": "mime",
+      "version": "1.6.0",
+      "scope": "required",
+      "purl": "pkg:npm/mime@1.6.0",
+      "description": "A comprehensive library for MIME-type mapping"
+    },
+    {
+      "bom-ref": "pkg:npm/jsonwebtoken@8.5.1",
+      "type": "library",
+      "name": "jsonwebtoken",
+      "version": "8.5.1",
+      "scope": "required",
+      "purl": "pkg:npm/jsonwebtoken@8.5.1",
+      "description": "JSON Web Token implementation (symmetric and asymmetric)"
+    },
+    {
+      "bom-ref": "pkg:npm/jws@3.2.2",
+      "type": "library",
+      "name": "jws",
+      "version": "3.2.2",
+      "scope": "required",
+      "purl": "pkg:npm/jws@3.2.2",
+      "description": "Implementation of JSON Web Signatures"
+    },
+    {
+      "bom-ref": "pkg:npm/jwa@1.4.1",
+      "type": "library",
+      "name": "jwa",
+      "version": "1.4.1",
+      "scope": "required",
+      "purl": "pkg:npm/jwa@1.4.1",
+      "description": "JSON Web Algorithms implementation"
+    },
+    {
+      "bom-ref": "pkg:npm/buffer-equal-constant-time@1.0.1",
+      "type": "library",
+      "name": "buffer-equal-constant-time",
+      "version": "1.0.1",
+      "scope": "required",
+      "purl": "pkg:npm/buffer-equal-constant-time@1.0.1",
+      "description": "Constant-time Buffer comparison"
+    },
+    {
+      "bom-ref": "pkg:npm/axios@0.21.1",
+      "type": "library",
+      "name": "axios",
+      "version": "0.21.1",
+      "scope": "required",
+      "purl": "pkg:npm/axios@0.21.1",
+      "description": "Promise based HTTP client for the browser and node.js"
+    },
+    {
+      "bom-ref": "pkg:npm/follow-redirects@1.14.0",
+      "type": "library",
+      "name": "follow-redirects",
+      "version": "1.14.0",
+      "scope": "required",
+      "purl": "pkg:npm/follow-redirects@1.14.0",
+      "description": "Drop-in replacement for Nodes http and https that automatically follows redirects"
+    },
+    {
+      "bom-ref": "pkg:npm/bcryptjs@2.4.3",
+      "type": "library",
+      "name": "bcryptjs",
+      "version": "2.4.3",
+      "scope": "required",
+      "purl": "pkg:npm/bcryptjs@2.4.3",
+      "description": "Optimized bcrypt in plain JavaScript with zero dependencies"
+    },
+    {
+      "bom-ref": "pkg:npm/cors@2.8.5",
+      "type": "library",
+      "name": "cors",
+      "version": "2.8.5",
+      "scope": "required",
+      "purl": "pkg:npm/cors@2.8.5",
+      "description": "Node.js CORS middleware"
+    },
+    {
+      "bom-ref": "pkg:npm/dotenv@16.0.3",
+      "type": "library",
+      "name": "dotenv",
+      "version": "16.0.3",
+      "scope": "required",
+      "purl": "pkg:npm/dotenv@16.0.3",
+      "description": "Loads environment variables from .env file"
+    },
+    {
+      "bom-ref": "pkg:npm/helmet@6.0.0",
+      "type": "library",
+      "name": "helmet",
+      "version": "6.0.0",
+      "scope": "required",
+      "purl": "pkg:npm/helmet@6.0.0",
+      "description": "Help secure Express apps with various HTTP headers"
+    },
+    {
+      "bom-ref": "pkg:npm/pg@8.7.1",
+      "type": "library",
+      "name": "pg",
+      "version": "8.7.1",
+      "scope": "required",
+      "purl": "pkg:npm/pg@8.7.1",
+      "description": "PostgreSQL client for Node.js"
+    },
+    {
+      "bom-ref": "pkg:npm/pg-connection-string@2.5.0",
+      "type": "library",
+      "name": "pg-connection-string",
+      "version": "2.5.0",
+      "scope": "required",
+      "purl": "pkg:npm/pg-connection-string@2.5.0",
+      "description": "Functions for dealing with a PostgresSQL connection string"
+    },
+    {
+      "bom-ref": "pkg:npm/winston@3.8.2",
+      "type": "library",
+      "name": "winston",
+      "version": "3.8.2",
+      "scope": "required",
+      "purl": "pkg:npm/winston@3.8.2",
+      "description": "A logger for just about everything"
+    },
+    {
+      "bom-ref": "pkg:npm/logform@2.4.2",
+      "type": "library",
+      "name": "logform",
+      "version": "2.4.2",
+      "scope": "required",
+      "purl": "pkg:npm/logform@2.4.2",
+      "description": "An mutable object-based log format designed for chained formatting"
+    },
+    {
+      "bom-ref": "pkg:npm/colors@1.4.0",
+      "type": "library",
+      "name": "colors",
+      "version": "1.4.0",
+      "scope": "required",
+      "purl": "pkg:npm/colors@1.4.0",
+      "description": "Get colors in your node.js console"
+    },
+    {
+      "bom-ref": "pkg:npm/lodash@4.17.21",
+      "type": "library",
+      "name": "lodash",
+      "version": "4.17.21",
+      "scope": "required",
+      "purl": "pkg:npm/lodash@4.17.21",
+      "description": "Lodash modular utilities"
+    },
+    {
+      "bom-ref": "pkg:npm/stripe@11.1.0",
+      "type": "library",
+      "name": "stripe",
+      "version": "11.1.0",
+      "scope": "required",
+      "purl": "pkg:npm/stripe@11.1.0",
+      "description": "Stripe API client wrapper for Node.js"
+    },
+    {
+      "bom-ref": "pkg:npm/redis@4.5.1",
+      "type": "library",
+      "name": "redis",
+      "version": "4.5.1",
+      "scope": "required",
+      "purl": "pkg:npm/redis@4.5.1",
+      "description": "A high-performance Redis client for Node.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:npm/payment-service@1.3.0",
+      "dependsOn": [
+        "pkg:npm/express@4.17.1",
+        "pkg:npm/jsonwebtoken@8.5.1",
+        "pkg:npm/axios@0.21.1",
+        "pkg:npm/bcryptjs@2.4.3",
+        "pkg:npm/cors@2.8.5",
+        "pkg:npm/dotenv@16.0.3",
+        "pkg:npm/helmet@6.0.0",
+        "pkg:npm/pg@8.7.1",
+        "pkg:npm/winston@3.8.2",
+        "pkg:npm/stripe@11.1.0",
+        "pkg:npm/redis@4.5.1"
+      ]
+    },
+    {
+      "ref": "pkg:npm/express@4.17.1",
+      "dependsOn": [
+        "pkg:npm/body-parser@1.19.0",
+        "pkg:npm/send@0.17.1",
+        "pkg:npm/qs@6.7.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/body-parser@1.19.0",
+      "dependsOn": [
+        "pkg:npm/qs@6.7.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/send@0.17.1",
+      "dependsOn": [
+        "pkg:npm/ms@2.1.1",
+        "pkg:npm/mime@1.6.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/jsonwebtoken@8.5.1",
+      "dependsOn": [
+        "pkg:npm/jws@3.2.2",
+        "pkg:npm/lodash@4.17.21",
+        "pkg:npm/ms@2.1.1"
+      ]
+    },
+    {
+      "ref": "pkg:npm/jws@3.2.2",
+      "dependsOn": [
+        "pkg:npm/jwa@1.4.1"
+      ]
+    },
+    {
+      "ref": "pkg:npm/jwa@1.4.1",
+      "dependsOn": [
+        "pkg:npm/buffer-equal-constant-time@1.0.1"
+      ]
+    },
+    {
+      "ref": "pkg:npm/axios@0.21.1",
+      "dependsOn": [
+        "pkg:npm/follow-redirects@1.14.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/pg@8.7.1",
+      "dependsOn": [
+        "pkg:npm/pg-connection-string@2.5.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/winston@3.8.2",
+      "dependsOn": [
+        "pkg:npm/logform@2.4.2",
+        "pkg:npm/colors@1.4.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/qs@6.7.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/ms@2.1.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/mime@1.6.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/buffer-equal-constant-time@1.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/follow-redirects@1.14.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/bcryptjs@2.4.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/cors@2.8.5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/dotenv@16.0.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/helmet@6.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/pg-connection-string@2.5.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/logform@2.4.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/colors@1.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/lodash@4.17.21",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/stripe@11.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/redis@4.5.1",
+      "dependsOn": []
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "CVE-2022-23529",
+      "description": "Remote Code Execution flaw in jsonwebtoken verification through untrusted secretOrPublicKey object tampering",
+      "ratings": [
+        {
+          "source": { "name": "NVD" },
+          "score": 9.8,
+          "severity": "critical",
+          "method": "CVSSv31"
+        }
+      ],
+      "cwes": [94, 502],
+      "affects": [
+        {
+          "ref": "pkg:npm/jsonwebtoken@8.5.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-29244",
+      "description": "Prototype Pollution vulnerability in qs parsing allowing property overwrite via crafted object parameters",
+      "ratings": [
+        {
+          "source": { "name": "NVD" },
+          "score": 7.5,
+          "severity": "high",
+          "method": "CVSSv31"
+        }
+      ],
+      "cwes": [1321],
+      "affects": [
+        {
+          "ref": "pkg:npm/qs@6.7.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-0155",
+      "description": "Exposure of sensitive authorization headers in follow-redirects when following cross-domain HTTP redirects",
+      "ratings": [
+        {
+          "source": { "name": "NVD" },
+          "score": 7.5,
+          "severity": "high",
+          "method": "CVSSv31"
+        }
+      ],
+      "cwes": [200, 522],
+      "affects": [
+        {
+          "ref": "pkg:npm/follow-redirects@1.14.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2020-28168",
+      "description": "Server-Side Request Forgery (SSRF) and credential leak in axios via relative URL path redirection",
+      "ratings": [
+        {
+          "source": { "name": "NVD" },
+          "score": 5.9,
+          "severity": "medium",
+          "method": "CVSSv31"
+        }
+      ],
+      "cwes": [918],
+      "affects": [
+        {
+          "ref": "pkg:npm/axios@0.21.1"
+        }
+      ]
+    }
+  ]
+}

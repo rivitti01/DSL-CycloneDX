@@ -311,6 +311,7 @@ The [`docs/`](docs/) directory contains comprehensive monographic documentation:
 - [docs/semantics.md](docs/semantics.md): Data model, CycloneDX catalog, and type system inference rules.
 - [docs/advanced-features.md](docs/advanced-features.md): Theoretical details of advanced security constructs, graph algorithms, and lowering logic.
 - [docs/examples.md](docs/examples.md): Extensive test cases, queries, output snippets, and `--explain` walkthroughs.
+- [docs/sbom_generation_guide.md](docs/sbom_generation_guide.md): Operational guide to generate authentic CycloneDX SBOMs for real services.
 
 ---
 
