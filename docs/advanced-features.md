@@ -1,4 +1,4 @@
-# Advanced Security Features and Query Lowering (30L)
+# Advanced Security Features and Query Lowering
 
 This document details the **advanced security features** introduced in the CycloneDX Query DSL to fulfill the objectives of the **Formal Languages and Compilers** course (Politecnico di Milano), demonstrating a complete compilation process via **Query Lowering** to relational and graph Intermediate Representation (IR).
 
