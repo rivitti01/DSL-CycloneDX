@@ -3,7 +3,7 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B20)
 [![CMake](https://img.shields.io/badge/CMake-3.20+-darkcyan.svg)](https://cmake.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-Passing%20(100%25)-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-Passing%20(100%25)-brightgreen.svg)](#running-tests)
 
 > Project for the **Formal Languages and Compilers** course — Politecnico di Milano.  
 > Objective: Design and implementation of a complete compiler for a Domain Specific Language (DSL) targeting querying and security analysis of Software Bill of Materials (SBOM) in **CycloneDX** format.
