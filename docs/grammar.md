@@ -34,6 +34,9 @@ The lexer recognizes keywords in a **case-insensitive** manner (e.g., `SELECT`, 
 Identifier      ::= ( Letter | '_' ) ( Letter | Digit | '_' | '-' )*
 Letter          ::= [a-zA-Z]
 Digit           ::= [0-9]
+WhiteSpace      ::= ( ' ' | '\t' | '\r' | '\n' )+
+CommentSingle   ::= ( '--' | '//' ) [^\n]* ( '\n' | EOF )
+CommentMulti    ::= '/*' ( [^*] | '*'+ [^*/] )* '*'+ '/'
 
 Star            ::= '*'
 Comma           ::= ','
