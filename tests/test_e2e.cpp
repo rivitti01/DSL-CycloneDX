@@ -144,7 +144,7 @@ TEST_CASE("End-to-End: Full Compiler Pipeline") {
         CHECK(res_lib_pass.rows.empty());
     }
 
-    SUBCASE("CLI Gatekeeper exit codes (0 on compliance, 1 on violation)") {
+    SUBCASE("CLI Gatekeeper exit codes (0 on compliance, 1 on violation, 2 on error)") {
         std::string exe = "./sbom-dsl";
         if (std::ifstream("./build/sbom-dsl").good()) {
             exe = "./build/sbom-dsl";
@@ -160,6 +160,15 @@ TEST_CASE("End-to-End: Full Compiler Pipeline") {
         int ret_fail = std::system(cmd_fail.c_str());
         int exit_code = (ret_fail >= 0 && ret_fail <= 255) ? ret_fail : (ret_fail >> 8);
         CHECK(exit_code == 1);
+
+        // Syntax errors and unreadable SBOMs are errors, not policy violations
+        std::string cmd_syntax = exe + " -b \"" + FIXTURE + "\" -c \"ASSERT VULNERABILITIES;\" > /dev/null 2>&1";
+        int ret_syntax = std::system(cmd_syntax.c_str());
+        CHECK(((ret_syntax >= 0 && ret_syntax <= 255) ? ret_syntax : (ret_syntax >> 8)) == 2);
+
+        std::string cmd_missing = exe + " -b does-not-exist.json -c \"ASSERT NO VULNERABILITIES;\" > /dev/null 2>&1";
+        int ret_missing = std::system(cmd_missing.c_str());
+        CHECK(((ret_missing >= 0 && ret_missing <= 255) ? ret_missing : (ret_missing >> 8)) == 2);
     }
 
     SUBCASE("CLI graphical export (--format dot and --format mermaid)") {
@@ -171,7 +180,8 @@ TEST_CASE("End-to-End: Full Compiler Pipeline") {
         auto run_cmd = [](const std::string& cmd) -> std::string {
             std::array<char, 256> buffer;
             std::string result;
-            std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+            auto closer = [](FILE* f) { if (f) pclose(f); };
+            std::unique_ptr<FILE, decltype(closer)> pipe(popen(cmd.c_str(), "r"), closer);
             if (!pipe) return "";
             while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
                 result += buffer.data();

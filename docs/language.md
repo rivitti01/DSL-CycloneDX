@@ -189,8 +189,9 @@ ASSERT NO <target>
 - **CVSS Score**: `SEVERITY > 10.0`, `SEVERITY >= 7.5`
 
 #### CI/CD Exit Code Protocol
-- **Exit Code `0` (Success/Compliant)**: When no matching violating records are found. Stampa un banner di conformità.
-- **Exit Code `1` (Failure/Non-Compliant)**: When one or more policy violations are detected. Stampa la tabella dettagliata dei componenti e vulnerabilità incriminati e termina con codice di uscita 1.
+- **Exit Code `0` (Success/Compliant)**: When no matching violating records are found. Prints a compliance banner.
+- **Exit Code `1` (Failure/Non-Compliant)**: When one or more policy violations are detected. Prints the table of offending components and vulnerabilities.
+- **Exit Code `2` (Error)**: When the program cannot be evaluated (lexical, syntax or semantic error, unreadable SBOM). A CI gate can therefore tell a violated policy from a broken query.
 
 **Examples:**
 ```sql

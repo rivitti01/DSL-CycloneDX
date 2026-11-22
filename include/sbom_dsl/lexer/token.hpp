@@ -2,6 +2,7 @@
 
 #include "sbom_dsl/common/source_location.hpp"
 #include <string>
+#include <optional>
 #include <string_view>
 
 namespace sbom_dsl {

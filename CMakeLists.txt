@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+option(SBOM_DSL_BUILD_TESTS "Build the doctest unit test suite" ON)
+
 # Compiler warnings
 if(MSVC)
     add_compile_options(/W4 /permissive-)
@@ -16,24 +22,14 @@ endif()
 # Dependencies via FetchContent
 include(FetchContent)
 
-# nlohmann/json
+# nlohmann/json: the official release tarball (~110 KB) is much faster to fetch
+# than a full clone of the repository.
 FetchContent_Declare(
     nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
 )
 FetchContent_MakeAvailable(nlohmann_json)
-
-# doctest for unit testing
-FetchContent_Declare(
-    doctest
-    GIT_REPOSITORY https://github.com/doctest/doctest.git
-    GIT_TAG v2.5.3
-)
-FetchContent_MakeAvailable(doctest)
-
-# Include directories
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Core Library Sources
 set(CORE_SOURCES
@@ -54,7 +50,7 @@ set(CORE_SOURCES
 )
 
 add_library(sbom_dsl_lib STATIC ${CORE_SOURCES})
-target_include_directories(sbom_dsl_lib PUBLIC 
+target_include_directories(sbom_dsl_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(sbom_dsl_lib PUBLIC nlohmann_json::nlohmann_json)
@@ -63,30 +59,28 @@ target_link_libraries(sbom_dsl_lib PUBLIC nlohmann_json::nlohmann_json)
 add_executable(sbom-dsl src/main.cpp)
 target_link_libraries(sbom-dsl PRIVATE sbom_dsl_lib)
 
+install(TARGETS sbom-dsl RUNTIME DESTINATION bin)
+
 # Testing
-enable_testing()
-add_compile_definitions(TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+if(SBOM_DSL_BUILD_TESTS)
+    FetchContent_Declare(
+        doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG v2.5.3
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(doctest)
 
-add_executable(test_lexer tests/test_lexer.cpp)
-target_link_libraries(test_lexer PRIVATE sbom_dsl_lib doctest::doctest)
-add_test(NAME test_lexer COMMAND test_lexer)
+    enable_testing()
 
-add_executable(test_parser tests/test_parser.cpp)
-target_link_libraries(test_parser PRIVATE sbom_dsl_lib doctest::doctest)
-add_test(NAME test_parser COMMAND test_parser)
+    foreach(test_name IN ITEMS test_lexer test_parser test_semantic test_lowering test_backend test_e2e)
+        add_executable(${test_name} tests/${test_name}.cpp)
+        target_link_libraries(${test_name} PRIVATE sbom_dsl_lib doctest::doctest)
+        target_compile_definitions(${test_name} PRIVATE
+            TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+        add_test(NAME ${test_name} COMMAND ${test_name})
+    endforeach()
 
-add_executable(test_semantic tests/test_semantic.cpp)
-target_link_libraries(test_semantic PRIVATE sbom_dsl_lib doctest::doctest)
-add_test(NAME test_semantic COMMAND test_semantic)
-
-add_executable(test_lowering tests/test_lowering.cpp)
-target_link_libraries(test_lowering PRIVATE sbom_dsl_lib doctest::doctest)
-add_test(NAME test_lowering COMMAND test_lowering)
-
-add_executable(test_backend tests/test_backend.cpp)
-target_link_libraries(test_backend PRIVATE sbom_dsl_lib doctest::doctest)
-add_test(NAME test_backend COMMAND test_backend)
-
-add_executable(test_e2e tests/test_e2e.cpp)
-target_link_libraries(test_e2e PRIVATE sbom_dsl_lib doctest::doctest)
-add_test(NAME test_e2e COMMAND test_e2e)
+    # test_e2e invokes the CLI binary, so it must be built first.
+    add_dependencies(test_e2e sbom-dsl)
+endif()

@@ -3,7 +3,7 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B20)
 [![CMake](https://img.shields.io/badge/CMake-3.20+-darkcyan.svg)](https://cmake.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-Passing%20(100%25)-brightgreen.svg)](#running-tests)
+[![CI](https://github.com/rivitti01/DSL-CycloneDX/actions/workflows/ci.yml/badge.svg)](https://github.com/rivitti01/DSL-CycloneDX/actions/workflows/ci.yml)
 
 > Project for the **Formal Languages and Compilers** course — Politecnico di Milano.  
 > Objective: Design and implementation of a complete compiler for a Domain Specific Language (DSL) targeting querying and security analysis of Software Bill of Materials (SBOM) in **CycloneDX** format.
@@ -25,6 +25,7 @@
   - [Output Formats](#output-formats)
   - [Explain Mode (`--explain`)](#explain-mode---explain)
   - [Interactive Shell (REPL)](#interactive-shell-repl)
+- [GitHub Action](#github-action)
 - [Complete Documentation](#complete-documentation)
 - [Limitations and Future Work](#limitations-and-future-work)
 
@@ -117,7 +118,7 @@ ORDER BY severity ASC;
 | `FIND VULNERABLE (COMPONENTS \| LIBRARIES) [SEVERITY op level] [WHERE condition];` | Correlates component catalog with vulnerability advisories (VEX/VDR) through relational join. | `Project -> HashJoin(affects == bom-ref) -> Filter(vulns) / Filter(comps)` |
 | `SHOW (TREE \| DEPENDENCIES) [OF "app"] [DEPTH n];` | Reconstructs hierarchical dependency tree in ASCII, JSON, Graphviz DOT, or Mermaid. | `Project -> HashJoin -> GraphTraverse(Forward, depth=n) -> Scan(dependencies)` |
 | `FIND BLAST RADIUS OF "CVE-...";` | Computes supply chain exposure percentage, direct & transitive impact, and root app exposure. | `BlastRadius -> ReverseReachability -> Scan(vulnerabilities)` |
-| `ASSERT NO (VULNERABILITIES \| COMPONENTS \| LIBRARIES) [SEVERITY op level_or_score] [WHERE condition];` | Automated CI/CD gatekeeping: returns exit code `0` on compliance or `1` with violating records. | `Project -> HashJoin -> Filter(vulns) -> Scan(components)` |
+| `ASSERT NO (VULNERABILITIES \| COMPONENTS \| LIBRARIES) [SEVERITY op level_or_score] [WHERE condition];` | Automated CI/CD gatekeeping: returns exit code `0` on compliance or `1` with violating records (`2` on errors). | `Project -> HashJoin -> Filter(vulns) -> Scan(components)` |
 
 **Examples:**
 ```sql
@@ -164,7 +165,7 @@ For more details, consult [docs/advanced-features.md](docs/advanced-features.md)
 ## Requirements and Build
 
 ### Requirements
-- Modern C++ compiler with full **C++20** support (AppleClang 15+, GCC 11+, Clang 13+);
+- Modern C++ compiler with full **C++20** support (AppleClang 15+, GCC 11+, Clang 13+), on Linux or macOS;
 - **CMake 3.20+**;
 - Internet connection for the initial automatic fetch of header-only dependencies (`nlohmann/json` and `doctest` via `FetchContent`).
 
@@ -181,6 +182,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
 ```
 The main generated executable is `build/sbom-dsl`.
+
+To build only the CLI (no `doctest` download, no test binaries), configure with
+`-DSBOM_DSL_BUILD_TESTS=OFF`. `cmake --install build --prefix <dir>` installs `sbom-dsl` into `<dir>/bin`.
 
 ---
 
@@ -218,9 +222,10 @@ ctest --test-dir build --output-on-failure
 
 ### DevSecOps & CI/CD Exit Codes
 
-The CLI implements the standard UNIX exit code convention for CI/CD pipelines:
+The CLI follows the exit code convention of linters such as `grep` and `eslint`, so a pipeline can tell a violated policy from a broken query:
 - **Exit Code `0` (Success / Compliant)**: Query executed successfully; all `ASSERT NO` policy assertions passed (no violating components or vulnerabilities found).
-- **Exit Code `1` (Failure / Policy Violation)**: One or more `ASSERT NO` policy assertions failed, or a lexical/syntax/semantic error occurred.
+- **Exit Code `1` (Policy Violation)**: One or more `ASSERT NO` policy assertions failed.
+- **Exit Code `2` (Error)**: A lexical, syntax or semantic error occurred, or the SBOM could not be read.
 
 Example GitHub Actions / GitLab CI pipeline gate:
 ```bash
@@ -301,12 +306,103 @@ Explain mode: ON
 
 ---
 
+## GitHub Action
+
+The repository is also a GitHub Action: it builds `sbom-dsl` on the runner (Linux or macOS), caches the binary,
+runs your DSL program against a CycloneDX SBOM, and fails the job when an `ASSERT NO` policy is violated.
+The result is written to the job summary (Mermaid diagrams are rendered there) and violated policies show up as
+annotations on the run and on pull requests.
+
+### Policy gate
+```yaml
+name: SBOM policy
+on: [push, pull_request]
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Any step that writes a CycloneDX JSON SBOM. Policies on vulnerabilities need an SBOM
+      # enriched with a "vulnerabilities" array (see docs/sbom_generation_guide.md).
+      - run: npx -y @cyclonedx/cyclonedx-npm --output-file bom.json
+
+      - name: Supply-chain policy gate
+        uses: rivitti01/DSL-CycloneDX@v1
+        with:
+          bom: bom.json
+          query: |
+            ASSERT NO VULNERABILITIES SEVERITY >= HIGH;
+            ASSERT NO LIBRARIES WHERE name = 'log4j-core' AND version LIKE '2.14%';
+```
+
+### Reports and report-only audits
+```yaml
+      # Dependency tree rendered as a Mermaid diagram in the job summary
+      - uses: rivitti01/DSL-CycloneDX@v1
+        with:
+          bom: bom.json
+          query: SHOW TREE DEPTH 2;
+          format: mermaid
+
+      # Policies from a file, reported as warnings without failing the job
+      - id: audit
+        uses: rivitti01/DSL-CycloneDX@v1
+        with:
+          bom: bom.json
+          query-file: security/policies.dsl
+          fail-on-violation: false
+
+      - if: steps.audit.outputs.result == 'violation'
+        env:
+          REPORT: ${{ steps.audit.outputs.output-file }}
+        run: cat "$REPORT"
+```
+If you set neither `query` nor `query-file`, the action only installs `sbom-dsl` on `PATH`, so later steps can call it directly.
+
+### Inputs
+| Input | Default | Description |
+| :--- | :--- | :--- |
+| `query` | | Inline DSL program (one or more statements). Cannot be used together with `query-file`. |
+| `query-file` | | Path to a `.dsl` file. |
+| `bom` | | Default CycloneDX JSON SBOM for every statement without an `IN "file"` clause. |
+| `format` | `table` | `table`, `json`, `tree`, `dot` or `mermaid`. |
+| `explain` | `false` | Print every compiler phase before the results. |
+| `fail-on-violation` | `true` | Fail the step when a policy is violated. Errors (exit code `2`) always fail the step. |
+| `job-summary` | `true` | Write the query and its result to the job summary. |
+| `working-directory` | `.` | Directory the query runs in; relative paths resolve from here. |
+
+### Outputs
+| Output | Description |
+| :--- | :--- |
+| `result` | `passed`, `violation`, `error`, or `installed` (no query given). |
+| `exit-code` | Exit code of `sbom-dsl` (`0`, `1` or `2`). |
+| `output-file` | File with the standard output of `sbom-dsl`. |
+| `sbom-dsl` | Absolute path of the binary (its directory is also added to `PATH`). |
+
+The first run on a runner image compiles the tool (about a minute); later runs restore it from the Actions cache.
+GitHub-hosted `ubuntu-*` and `macos-*` runners already have CMake and a C++20 compiler; self-hosted runners and
+container jobs need CMake 3.20+ and GCC 11+ / Clang 13+. Windows runners are not supported yet.
+
+### Publishing a version
+Workflows reference the action by tag (`@v1`). Until a tag exists, use `@main`. To publish:
+```bash
+git tag -a v1.0.0 -m "sbom-dsl v1.0.0"
+git tag -f v1 v1.0.0          # the major tag follows the latest v1.x.y
+git push origin v1.0.0
+git push -f origin v1
+```
+To list it on the GitHub Marketplace, open the `v1.0.0` release and select *Publish this Action to the GitHub Marketplace*.
+
+---
+
 ## Complete Documentation
 
 The [`docs/`](docs/) directory contains comprehensive monographic documentation:
 - [docs/sbom_utility_analysis.md](docs/sbom_utility_analysis.md): Preliminary study of CycloneDX schema and `sbom-utility` capabilities and limitations (Phase 0).
 - [docs/architecture.md](docs/architecture.md): Compiler architecture, pipeline details, and computational complexity.
-- [docs/grammar.md](docs/grammar.md): Complete EBNF formal grammar, tokens, and operator precedence hierarchy.
+- [docs/grammar.md](docs/grammar.md): Complete LL(1) EBNF grammar, tokens, and operator precedence hierarchy (verified by `python3 tools/check_ll1.py`).
 - [docs/language.md](docs/language.md): User reference manual covering all supported statements and clauses.
 - [docs/semantics.md](docs/semantics.md): Data model, CycloneDX catalog, and type system inference rules.
 - [docs/advanced-features.md](docs/advanced-features.md): Theoretical details of advanced security constructs, graph algorithms, and lowering logic.

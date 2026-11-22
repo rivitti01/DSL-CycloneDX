@@ -399,3 +399,77 @@ TEST_CASE("Parser: Aggregations and GROUP BY") {
         CHECK(diag.has_errors());
     }
 }
+
+TEST_CASE("Parser: LL(1) grammar rules (docs/grammar.md)") {
+    SUBCASE("Soft keywords are accepted as column names") {
+        DiagnosticEngine diag;
+        auto prog = parse("SELECT severity, type FROM vulnerabilities WHERE severity = HIGH;", diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog->statements.size() == 1);
+        auto* select = dynamic_cast<SelectStatement*>(prog->statements[0].get());
+        REQUIRE(select != nullptr);
+        CHECK(select->projections[0] == "severity");
+    }
+
+    SUBCASE("Reserved keywords are rejected as column names") {
+        for (const char* q : {"SELECT count FROM components;",
+                              "SELECT high FROM components;",
+                              "SELECT , FROM components;",
+                              "SELECT name FROM components GROUP BY NOT;"}) {
+            DiagnosticEngine diag;
+            parse(q, diag);
+            CHECK_MESSAGE(diag.has_errors(), q);
+        }
+    }
+
+    SUBCASE("A single IN clause, at any of the allowed positions") {
+        for (const char* q : {"SELECT * FROM components IN 'b.json' WHERE type = 'library';",
+                              "SELECT * FROM components WHERE type = 'library' IN 'b.json' LIMIT 1;",
+                              "SELECT type, COUNT(*) FROM components GROUP BY type IN 'b.json' ORDER BY type;",
+                              "SELECT * FROM components ORDER BY name LIMIT 1 IN 'b.json';",
+                              "ASSERT NO VULNERABILITIES IN 'b.json' SEVERITY >= HIGH;",
+                              "ASSERT NO VULNERABILITIES SEVERITY >= HIGH IN 'b.json';"}) {
+            DiagnosticEngine diag;
+            auto prog = parse(q, diag);
+            CHECK_MESSAGE(!diag.has_errors(), q);
+            REQUIRE(prog->statements.size() == 1);
+        }
+    }
+
+    SUBCASE("A second IN clause, or IN between ORDER BY and LIMIT, is a syntax error") {
+        for (const char* q : {"SELECT * FROM components IN 'a.json' WHERE type = 'library' IN 'b.json';",
+                              "SELECT * FROM components ORDER BY name IN 'b.json' LIMIT 1;",
+                              "ASSERT NO VULNERABILITIES IN 'a.json' SEVERITY >= HIGH IN 'b.json';"}) {
+            DiagnosticEngine diag;
+            parse(q, diag);
+            CHECK_MESSAGE(diag.has_errors(), q);
+        }
+    }
+
+    SUBCASE("FIND is left-factored: VULNERABLE or BLAST decides the statement") {
+        DiagnosticEngine diag;
+        auto prog = parse("FIND VULNERABLE LIBRARIES; FIND BLAST RADIUS OF 'CVE-2021-44228'", diag);
+        CHECK_FALSE(diag.has_errors());
+        REQUIRE(prog->statements.size() == 2);
+        CHECK(dynamic_cast<FindVulnerableStatement*>(prog->statements[0].get()) != nullptr);
+        CHECK(dynamic_cast<BlastRadiusStatement*>(prog->statements[1].get()) != nullptr);
+    }
+
+    SUBCASE("Boolean literals are case-insensitive") {
+        for (const char* q : {"SELECT * FROM components WHERE x = True;",
+                              "SELECT * FROM components WHERE x = TRUE;",
+                              "SELECT * FROM components WHERE x = true;"}) {
+            DiagnosticEngine diag;
+            auto prog = parse(q, diag);
+            REQUIRE_FALSE(diag.has_errors());
+            auto* select = dynamic_cast<SelectStatement*>(prog->statements[0].get());
+            REQUIRE(select != nullptr);
+            auto* cmp = dynamic_cast<BinaryOpExpr*>(select->where_clause.get());
+            REQUIRE(cmp != nullptr);
+            auto* lit = dynamic_cast<LiteralExpr*>(cmp->right.get());
+            REQUIRE(lit != nullptr);
+            REQUIRE(std::holds_alternative<bool>(lit->value));
+            CHECK_MESSAGE(std::get<bool>(lit->value), q);
+        }
+    }
+}

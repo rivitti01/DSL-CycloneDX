@@ -61,7 +61,8 @@ void CLIOptions::print_help(const char* prog_name) {
               << "  " << prog_name << " query.dsl --explain\n\n"
               << "CI/CD Exit Codes:\n"
               << "  0 = Success / Compliance (all assertions passed)\n"
-              << "  1 = Policy Violation (one or more assertions failed) or Error\n";
+              << "  1 = Policy Violation (one or more assertions failed)\n"
+              << "  2 = Error (lexical, syntax, semantic or I/O error)\n";
 }
 
 void CLIOptions::print_version() {

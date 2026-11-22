@@ -16,6 +16,11 @@
 
 using namespace sbom_dsl;
 
+// CI/CD exit codes: a failed policy must be distinguishable from a broken query.
+static constexpr int kExitOk = 0;
+static constexpr int kExitPolicyViolation = 1;
+static constexpr int kExitError = 2;
+
 static int execute_query_pipeline(const std::string& source,
                                    const std::string& filename,
                                    const CLIOptions& opts,
@@ -37,7 +42,7 @@ static int execute_query_pipeline(const std::string& source,
 
     if (diag.has_errors()) {
         diag.print_all(std::cerr);
-        return 1;
+        return kExitError;
     }
 
     // Stage 2: Parser
@@ -46,7 +51,7 @@ static int execute_query_pipeline(const std::string& source,
 
     if (diag.has_errors() || !program) {
         diag.print_all(std::cerr);
-        return 1;
+        return kExitError;
     }
 
     if (opts.explain) {
@@ -74,7 +79,7 @@ static int execute_query_pipeline(const std::string& source,
 
     if (!semantic_ok || diag.has_errors()) {
         diag.print_all(std::cerr);
-        return 1;
+        return kExitError;
     }
 
     // Stage 4 & 5: Lowering & Execution per statement
@@ -158,13 +163,13 @@ static int execute_query_pipeline(const std::string& source,
 
         if (diag.has_errors()) {
             diag.print_all(std::cerr);
-            return 1;
+            return kExitError;
         } else {
             std::cout << ResultFormatter::format(result, opts.output_format);
         }
     }
 
-    return policy_violation ? 1 : 0;
+    return policy_violation ? kExitPolicyViolation : kExitOk;
 }
 
 static void run_repl(const CLIOptions& base_opts, NativeEngine& engine) {
@@ -236,7 +241,7 @@ int main(int argc, char* argv[]) {
 
     if (opts.show_help) {
         CLIOptions::print_help(argv[0]);
-        return 0;
+        return kExitOk;
     }
 
     if (opts.show_version) {
@@ -263,7 +268,7 @@ int main(int argc, char* argv[]) {
         std::ifstream file(*opts.query_file);
         if (!file.is_open()) {
             std::cerr << "Error: Could not open query file '" << *opts.query_file << "'\n";
-            return 1;
+            return kExitError;
         }
         std::ostringstream ss;
         ss << file.rdbuf();

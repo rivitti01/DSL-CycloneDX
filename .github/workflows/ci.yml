@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux GCC 13, os: ubuntu-24.04, cxx: g++ }
+          - { name: Linux GCC 11 (oldest supported), os: ubuntu-24.04, cxx: g++-11, apt: g++-11 }
+          - { name: Linux Clang, os: ubuntu-24.04, cxx: clang++ }
+          - { name: macOS AppleClang, os: macos-latest, cxx: clang++ }
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install compiler
+        if: matrix.apt
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ${{ matrix.apt }}
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+      - name: Build
+        run: cmake --build build --parallel 4
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  grammar:
+    name: Grammar is LL(1)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tools/check_ll1.py docs/grammar.md
+
+  action:
+    name: GitHub Action (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Policy that passes
+        id: pass
+        uses: ./
+        with:
+          bom: tests/fixtures/sample_cyclonedx.json
+          query: ASSERT NO VULNERABILITIES SEVERITY > 10.0;
+
+      - name: Policy that is violated (reported, not failing)
+        id: violation
+        uses: ./
+        with:
+          bom: tests/fixtures/sample_cyclonedx.json
+          query: ASSERT NO VULNERABILITIES SEVERITY >= HIGH;
+          fail-on-violation: false
+
+      - name: Syntax error (must fail the step)
+        id: error
+        continue-on-error: true
+        uses: ./
+        with:
+          bom: tests/fixtures/sample_cyclonedx.json
+          query: ASSERT VULNERABILITIES;
+
+      - name: Query file with Mermaid output
+        uses: ./
+        with:
+          query-file: examples/show_tree.dsl
+          format: mermaid
+
+      - name: Check outputs
+        shell: bash
+        env:
+          PASS_RESULT: ${{ steps.pass.outputs.result }}
+          PASS_CODE: ${{ steps.pass.outputs.exit-code }}
+          VIOLATION_RESULT: ${{ steps.violation.outputs.result }}
+          VIOLATION_CODE: ${{ steps.violation.outputs.exit-code }}
+          VIOLATION_FILE: ${{ steps.violation.outputs.output-file }}
+          ERROR_OUTCOME: ${{ steps.error.outcome }}
+        run: |
+          set -x
+          test "$PASS_RESULT" = passed && test "$PASS_CODE" = 0
+          test "$VIOLATION_RESULT" = violation && test "$VIOLATION_CODE" = 1
+          grep -q 'POLICY ASSERTION FAILED' "$VIOLATION_FILE"
+          test "$ERROR_OUTCOME" = failure
+          sbom-dsl --version

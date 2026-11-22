@@ -1,4 +1,6 @@
 #include "sbom_dsl/parser/parser.hpp"
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 
 namespace sbom_dsl {
@@ -12,6 +14,30 @@ namespace {
         PrecComparison = 4,
         PrecPrimary = 5
     };
+
+    // A column path may start with an identifier or with a "soft" keyword
+    // (e.g. `severity`, `type`). Keywords that open a different construct in
+    // the same position are reserved, which keeps the grammar LL(1):
+    //   NOT                -> unary operator        (PrimaryExpr)
+    //   COUNT              -> aggregate function    (ProjectionItem)
+    //   CRITICAL ... NONE  -> severity literals     (PrimaryExpr)
+    bool is_column_name_start(const Token& tok) {
+        switch (tok.type) {
+            case TokenType::Identifier:
+                return true;
+            case TokenType::KwNot:
+            case TokenType::KwCount:
+            case TokenType::KwCritical:
+            case TokenType::KwHigh:
+            case TokenType::KwMedium:
+            case TokenType::KwLow:
+            case TokenType::KwInfo:
+            case TokenType::KwNone:
+                return false;
+            default:
+                return tok.is_keyword();
+        }
+    }
 }
 
 Parser::Parser(std::vector<Token> tokens, DiagnosticEngine& diag)
@@ -115,6 +141,11 @@ BinaryOperator Parser::token_to_binary_op(TokenType type) const {
 
 std::vector<std::string> Parser::parse_column_path() {
     std::vector<std::string> path;
+    if (!is_column_name_start(peek())) {
+        std::string found = peek().type == TokenType::EndOfFile ? "end of input" : "'" + peek().lexeme + "'";
+        diag_.error(peek().location, "Expected column name, found " + found);
+        throw std::runtime_error("Expected column name");
+    }
     const Token& first = advance();
     path.push_back(first.lexeme);
 
@@ -165,7 +196,10 @@ std::unique_ptr<ExpressionNode> Parser::parse_primary() {
 
     // Boolean literal
     if (match(TokenType::BooleanLiteral)) {
-        bool val = (previous().lexeme == "true" || previous().lexeme == "TRUE");
+        std::string upper = previous().lexeme;
+        std::transform(upper.begin(), upper.end(), upper.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+        bool val = (upper == "TRUE"); // keywords are case-insensitive: True, tRuE, ...
         return std::make_unique<LiteralExpr>(val, previous().location);
     }
 
@@ -179,7 +213,7 @@ std::unique_ptr<ExpressionNode> Parser::parse_primary() {
     }
 
     // Column reference or Identifier
-    if (tok.type == TokenType::Identifier || tok.is_keyword()) {
+    if (is_column_name_start(tok)) {
         SourceLocation loc = tok.location;
         auto path = parse_column_path();
         return std::make_unique<ColumnRefExpr>(std::move(path), loc);
@@ -230,7 +264,7 @@ std::unique_ptr<SelectStatement> Parser::parse_select_statement() {
                 std::string arg;
                 if (match(TokenType::Star)) {
                     arg = "*";
-                } else if (check(TokenType::Identifier) || peek().is_keyword()) {
+                } else if (is_column_name_start(peek())) {
                     auto path = parse_column_path();
                     for (size_t i = 0; i < path.size(); ++i) {
                         if (i > 0) arg += ".";
@@ -310,7 +344,7 @@ std::unique_ptr<SelectStatement> Parser::parse_select_statement() {
             std::string arg;
             if (match(TokenType::Star)) {
                 arg = "*";
-            } else if (check(TokenType::Identifier) || peek().is_keyword()) {
+            } else if (is_column_name_start(peek())) {
                 auto path = parse_column_path();
                 for (size_t i = 0; i < path.size(); ++i) {
                     if (i > 0) arg += ".";

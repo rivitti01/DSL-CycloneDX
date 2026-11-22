@@ -1,0 +1,100 @@
+name: CycloneDX SBOM Query DSL
+description: >-
+  Query CycloneDX SBOMs and enforce supply-chain policies (ASSERT NO ...) in CI
+  with the sbom-dsl compiler. Builds the tool from source and caches it.
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  query:
+    description: >-
+      Inline DSL program: one or more statements, e.g.
+      "ASSERT NO VULNERABILITIES SEVERITY >= HIGH;". Cannot be used together with query-file.
+    required: false
+    default: ''
+  query-file:
+    description: >-
+      Path to a .dsl file, relative to working-directory. Cannot be used together with query.
+      If neither query nor query-file is set, the action only installs sbom-dsl on PATH.
+    required: false
+    default: ''
+  bom:
+    description: >-
+      Default CycloneDX JSON SBOM, used by every statement without an IN "file" clause.
+    required: false
+    default: ''
+  format:
+    description: 'Output format: table, json, tree, dot or mermaid.'
+    required: false
+    default: table
+  explain:
+    description: Print every compiler phase (tokens, AST, IR, optimized plan) before the results.
+    required: false
+    default: 'false'
+  fail-on-violation:
+    description: >-
+      Fail the step when an ASSERT NO policy is violated (sbom-dsl exit code 1).
+      Errors such as syntax errors or a missing SBOM (exit code 2) always fail the step.
+    required: false
+    default: 'true'
+  job-summary:
+    description: Write the query and its result to the job summary.
+    required: false
+    default: 'true'
+  working-directory:
+    description: Directory the query runs in. Relative paths in IN clauses and inputs resolve from here.
+    required: false
+    default: '.'
+
+outputs:
+  result:
+    description: "passed (exit 0), violation (exit 1), error (exit 2), or installed (no query given)."
+    value: ${{ steps.run.outputs.result }}
+  exit-code:
+    description: Exit code of sbom-dsl.
+    value: ${{ steps.run.outputs.exit-code }}
+  output-file:
+    description: Path of a file with the standard output of sbom-dsl.
+    value: ${{ steps.run.outputs.output-file }}
+  sbom-dsl:
+    description: Absolute path of the sbom-dsl binary. Its directory is also added to PATH.
+    value: ${{ steps.setup.outputs.binary }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare sbom-dsl build
+      id: setup
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/action/build.sh" prepare'
+
+    - name: Restore sbom-dsl from cache
+      id: cache
+      if: steps.setup.outputs.installed != 'true'
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.setup.outputs.install-dir }}
+        key: ${{ steps.setup.outputs.cache-key }}
+
+    - name: Build sbom-dsl
+      if: steps.setup.outputs.installed != 'true' && steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        SBOM_DSL_INSTALL_DIR: ${{ steps.setup.outputs.install-dir }}
+      run: '"$GITHUB_ACTION_PATH/action/build.sh" build'
+
+    - name: Run sbom-dsl
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SBOM_DSL_BIN: ${{ steps.setup.outputs.binary }}
+        INPUT_QUERY: ${{ inputs.query }}
+        INPUT_QUERY_FILE: ${{ inputs.query-file }}
+        INPUT_BOM: ${{ inputs.bom }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_EXPLAIN: ${{ inputs.explain }}
+        INPUT_FAIL_ON_VIOLATION: ${{ inputs.fail-on-violation }}
+        INPUT_JOB_SUMMARY: ${{ inputs.job-summary }}
+      run: '"$GITHUB_ACTION_PATH/action/run.sh"'
